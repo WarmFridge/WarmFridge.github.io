@@ -1,0 +1,23 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Sunup//Morning XP//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+BEGIN:VEVENT
+UID:sunup-friday@warmfridge.github.io
+DTSTAMP:20261121T000000Z
+DTSTART:20261120T073000
+DURATION:PT15M
+RRULE:FREQ=WEEKLY;BYDAY=FR
+SUMMARY:🎁 Sunup — Friday check-in. Store is open!
+DESCRIPTION:Open Sunup\, collect your week of XP and cash out in the store
+ . XP carries over.\nhttps://warmfridge.github.io/
+URL:https://warmfridge.github.io/
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Friday check-in — collect your XP\, the store is open
+TRIGGER:PT0S
+END:VALARM
+END:VEVENT
+END:VCALENDAR

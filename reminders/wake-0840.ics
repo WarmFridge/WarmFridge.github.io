@@ -1,0 +1,24 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Sunup//Morning XP//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+BEGIN:VEVENT
+UID:sunup-wake@warmfridge.github.io
+DTSTAMP:20261121T000000Z
+DTSTART:20261116T084000
+DURATION:PT15M
+RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR
+SUMMARY:☀️ Sunup — get up! Up in 5 = +10
+DESCRIPTION:Open Sunup and tap “I’m up”.\nUp within 5 min = +10 · w
+ ithin 10 min = +5 · later = +1.\nThen keep moving: 10 min stuck before y
+ ou’re done = −5.\nhttps://warmfridge.github.io/
+URL:https://warmfridge.github.io/
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Get up now — +10 for the next 5 minutes
+TRIGGER:PT0S
+END:VALARM
+END:VEVENT
+END:VCALENDAR
