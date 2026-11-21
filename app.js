@@ -7,9 +7,10 @@
 
   /* ---------- The rules (straight from the notebook page) ---------- */
   const RULES = {
-    fastMin: 5, fastXp: 10,   // up within 5 min of the alarm  → +10
-    okMin: 10, okXp: 5,       // up within 10 min              → +5
-    lateXp: 1,                // up later                      → +1
+    // Whole clock minutes after that day's alarm. With a 7:25 alarm:
+    fastMin: 10, fastXp: 10,  // up by 7:35       → +10
+    okMin: 24, okXp: 5,       // up by 7:49       → +5
+    lateXp: 1,                // 7:50 or later    → +1
     idleMin: 10, penalty: 5,  // stationary > 10 min before everything is done → −5 (once a morning)
     warnMin: 2,               // heads-up this long before the −5
     earliestMin: 180,         // "I'm up" unlocks 3 h before the alarm
@@ -81,7 +82,9 @@
     return {
       v: 1, routineV: 2, onboarded: false, bank: 0, days: {}, checkins: [], redemptions: [], createdAt: Date.now(),
       settings: {
-        name: '', wakeTime: '07:00', checkinTime: '17:00', theme: 'midnight',
+        name: '', checkinTime: '17:00', theme: 'midnight',
+        wakeTimes: { 1: '07:25', 2: '07:25', 3: '07:25', 4: '07:25', 5: '07:25' }, // Mon–Fri alarms
+        alarmChoices: ['06:25', '07:25'], // one-tap "Today's alarm" options
         sound: true, alerts: false, unit: 'xp',
         tasks: clone(DEFAULT_TASKS), rewards: clone(DEFAULT_REWARDS),
       },
@@ -90,7 +93,17 @@
   function normalize(s) {
     const base = fresh();
     if (!s || typeof s !== 'object') return base;
-    s.settings = Object.assign(base.settings, s.settings || {});
+    const saved = s.settings || {};
+    s.settings = Object.assign(base.settings, saved);
+    const okTime = (v) => /^\d{2}:\d{2}$/.test(v || '');
+    if (!saved.wakeTimes || typeof saved.wakeTimes !== 'object') {
+      // Earlier versions had one alarm for every weekday.
+      const w = okTime(saved.wakeTime) ? saved.wakeTime : '07:25';
+      s.settings.wakeTimes = { 1: w, 2: w, 3: w, 4: w, 5: w };
+    }
+    for (const d of [1, 2, 3, 4, 5]) if (!okTime(s.settings.wakeTimes[d])) s.settings.wakeTimes[d] = '07:25';
+    delete s.settings.wakeTime;
+    if (!Array.isArray(s.settings.alarmChoices)) s.settings.alarmChoices = ['06:25', '07:25'];
     if (!Array.isArray(s.settings.tasks)) s.settings.tasks = base.settings.tasks;
     for (const t of s.settings.tasks) if (typeof t.xp !== 'number') t.xp = defaultStepXp(t.id);
     if ((s.routineV || 1) < 2) {
@@ -179,17 +192,18 @@
   const whenFriday = (n) => (n === 0 ? 'today' : n === 1 ? 'tomorrow' : `in ${n} days`);
 
   /* ---------- Scoring ---------- */
+  // Counted in whole clock minutes, like reading the clock: 7:35:50 still shows 7:35, so it's +10.
   function wakeXpFor(upAt, target) {
-    const m = (upAt - target) / MIN;
+    const m = Math.floor((upAt - target) / MIN);
     if (m <= RULES.fastMin) return RULES.fastXp;
     if (m <= RULES.okMin) return RULES.okXp;
     return RULES.lateXp;
   }
   function wakeWindow(t, target) {
-    const e = t - target;
-    if (e < 0) return { phase: 'early', xp: RULES.fastXp, remaining: -e, total: 0 };
-    if (e <= RULES.fastMin * MIN) return { phase: 'fast', xp: RULES.fastXp, remaining: RULES.fastMin * MIN - e, total: RULES.fastMin * MIN };
-    if (e <= RULES.okMin * MIN) return { phase: 'ok', xp: RULES.okXp, remaining: RULES.okMin * MIN - e, total: (RULES.okMin - RULES.fastMin) * MIN };
+    const fastEnd = target + (RULES.fastMin + 1) * MIN, okEnd = target + (RULES.okMin + 1) * MIN;
+    if (t < target) return { phase: 'early', xp: RULES.fastXp, remaining: target - t, total: 0, until: fastEnd - MIN };
+    if (t < fastEnd) return { phase: 'fast', xp: RULES.fastXp, remaining: fastEnd - t, total: fastEnd - target, until: fastEnd - MIN };
+    if (t < okEnd) return { phase: 'ok', xp: RULES.okXp, remaining: okEnd - t, total: okEnd - fastEnd, until: okEnd - MIN };
     return { phase: 'late', xp: RULES.lateXp, remaining: 0, total: 0 };
   }
   const stepXp = (d) => (d.steps || []).reduce((a, s) => a + (s.id !== 'up' && d.done && d.done[s.id] ? s.xp || 0 : 0), 0);
@@ -200,7 +214,10 @@
   const nextStep = (d) => d.steps.find((s) => !d.done[s.id]);
   const allDone = (d) => d.steps.every((s) => d.done[s.id]);
   const idleLeft = (d, t = now()) => RULES.idleMin * MIN - (t - d.last);
-  const targetFor = (k) => at(k, (S.days[k] && S.days[k].target) || S.settings.wakeTime);
+  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const alarmFor = (k) => { const w = S.settings.wakeTimes[dow(dateOfKey(k).getTime())]; return validHHMM(w) ? w : '07:25'; };
+  const targetFor = (k) => at(k, (S.days[k] && S.days[k].target) || alarmFor(k));
+  const alarmTimes = () => [...new Set([1, 2, 3, 4, 5].map((d) => S.settings.wakeTimes[d]))].sort();
 
   const pendingXp = () => Object.values(S.days).reduce((a, d) => a + net(d) - (d.collected || 0), 0);
   const lifetimeXp = () => Object.values(S.days).reduce((a, d) => a + Math.max(0, net(d)), 0);
@@ -321,8 +338,7 @@
   function wakeLine(w, tooEarly, target) {
     if (tooEarly) return `Too early to count — unlocks at <b>${fmtTime(target - RULES.earliestMin * MIN)}</b>`;
     if (w.phase === 'early') return `Alarm in <b data-live="wake-clock">${fmtLeft(w.remaining)}</b> · up early still counts`;
-    if (w.phase === 'fast') return `Get up within <b data-live="wake-clock">${fmtClock(w.remaining)}</b> for +${RULES.fastXp} ${U()}`;
-    if (w.phase === 'ok') return `Get up within <b data-live="wake-clock">${fmtClock(w.remaining)}</b> for +${RULES.okXp} ${U()}`;
+    if (w.phase === 'fast' || w.phase === 'ok') return `Up by <b>${fmtTime(w.until)}</b> for +${w.xp} ${U()} · <b data-live="wake-clock">${fmtClock(w.remaining)}</b> left`;
     return `Still worth <b>+${RULES.lateXp} ${U()}</b> — every start counts`;
   }
   function wakeHero(k) {
@@ -331,9 +347,9 @@
     const tooEarly = t < target - RULES.earliestMin * MIN;
     const tierIdx = w.phase === 'ok' ? 1 : w.phase === 'late' ? 2 : 0;
     const tiers = [
-      [`+${RULES.fastXp}`, `within ${RULES.fastMin} min`],
-      [`+${RULES.okXp}`, `within ${RULES.okMin} min`],
-      [`+${RULES.lateXp}`, 'later'],
+      [`+${RULES.fastXp}`, `by ${fmtTime(target + RULES.fastMin * MIN)}`],
+      [`+${RULES.okXp}`, `by ${fmtTime(target + RULES.okMin * MIN)}`],
+      [`+${RULES.lateXp}`, `${fmtTime(target + (RULES.okMin + 1) * MIN)}+`],
     ];
     return `
       <section class="card hero">
@@ -346,11 +362,20 @@
         </div>
         <p class="hero-line">${wakeLine(w, tooEarly, target)}</p>
         <button class="btn btn-primary btn-xl" data-action="get-up" ${tooEarly ? 'disabled' : ''}>${I('check')} I’m up</button>
-        <button class="link-btn" data-action="change-target">${I('clock')} Alarm ${fmtTime(target)} · change for today</button>
+        ${alarmPicker(k)}
       </section>
       <div class="tiers">${tiers.map(([xp, label], i) =>
         `<div class="tier ${i === tierIdx ? 'is-active' : ''} ${i < tierIdx ? 'is-past' : ''}"><b>${xp}</b><span>${label}</span></div>`).join('')}
       </div>`;
+  }
+  // One tap to say which alarm you're on today (it varies), plus "Other" for anything else.
+  function alarmPicker(k) {
+    const cur = (S.days[k] && S.days[k].target) || alarmFor(k);
+    const choices = [...new Set([...S.settings.alarmChoices, ...alarmTimes(), cur])].filter(validHHMM).sort().slice(0, 4);
+    return `<div class="alarm-pick"><span>${I('clock')} Today’s alarm</span>
+      <div class="seg" role="group" aria-label="Today’s alarm">${choices.map((c) =>
+        `<button class="${c === cur ? 'is-on' : ''}" data-action="pick-alarm" data-time="${c}" aria-pressed="${c === cur}">${fmtHHMM(c)}</button>`).join('')}
+        <button data-action="change-target">Other</button></div></div>`;
   }
   function routinePreview() {
     const steps = currentSteps();
@@ -424,7 +449,7 @@
     return `<section class="card weekend">
         <div class="weekend-ic">🌿</div>
         <h2>No tracking on weekends</h2>
-        <p>Rest up. Sunup is back Monday — alarm at ${fmtHHMM(S.settings.wakeTime)}.</p>
+        <p>Rest up. Sunup is back Monday — alarm at ${fmtHHMM(S.settings.wakeTimes[1])}.</p>
       </section>
       ${p > 0 ? `<section class="card notice notice-info">${I('info')}<div><b>Your ${signed(p)} ${U()} is safe</b>
         <p>Missed Friday’s check-in? No stress — it rolls into next Friday.</p></div></section>` : ''}
@@ -579,17 +604,18 @@
     `<button class="switch" role="switch" aria-checked="${on ? 'true' : 'false'}" aria-label="${label}" data-action="toggle" data-key="${key}"></button>`;
   function calButtons() {
     return ['wake', 'friday'].map((kind) => {
-      const hhmm = kind === 'wake' ? S.settings.wakeTime : S.settings.checkinTime;
+      const times = kind === 'wake' ? alarmTimes() : [S.settings.checkinTime];
+      const when = times.length === 1 ? fmtHHMM(times[0]) : 'your alarms';
       const inner = `${I('calPlus')}<span><b>${kind === 'wake' ? 'Wake-up' : 'Check-in'}</b>
-        <small>${kind === 'wake' ? 'Mon–Fri' : 'Fridays'} · ${fmtHHMM(hhmm)}</small></span>`;
-      const path = window.SunupICS && SunupICS.staticPath(kind, hhmm);
+        <small>${kind === 'wake' ? 'Mon–Fri' : 'Fridays'} · ${when}</small></span>`;
+      const path = times.length === 1 && window.SunupICS && SunupICS.staticPath(kind, times[0]);
       return path
         ? `<a class="cal-btn" href="${path}" target="_blank" rel="noopener">${inner}</a>`
         : `<button class="cal-btn" data-action="cal" data-kind="${kind}">${inner}</button>`;
     }).join('');
   }
   const remindersSummary = () =>
-    `Mon–Fri at ${fmtHHMM(S.settings.wakeTime)}: wake-up + “1 min left” nudges. Keep-moving nudges during your routine. ` +
+    `Mon–Fri at your alarm (${alarmTimes().map(fmtHHMM).join(' or ')}): wake-up + “1 min left” nudges. Keep-moving nudges during your routine. ` +
     `Fridays at ${fmtHHMM(S.settings.checkinTime)}: check-in. Rings even when Sunup is closed.`;
   function viewSettings() {
     const s = S.settings;
@@ -606,8 +632,9 @@
 
       <h3 class="section-title">Morning</h3>
       <section class="card list">
-        <label class="row"><div class="row-main"><b>Weekday alarm</b><span>Your wake-up score counts from this time</span></div>
-          <input type="time" data-field="wakeTime" value="${s.wakeTime}"></label>
+        <div class="row"><div class="row-main"><b>${I('clock')} Weekday alarms</b><span>Scoring counts from that day’s alarm. Different one morning? Tap it on the Today screen.</span></div></div>
+        ${[1, 2, 3, 4, 5].map((dd) => `<label class="row tight"><div class="row-main"><b>${DAY_NAMES[dd]}</b></div>
+          <input type="time" data-wakeday="${dd}" value="${s.wakeTimes[dd]}"></label>`).join('')}
         <label class="row"><div class="row-main"><b>Your name</b><span>For the greeting</span></div>
           <input type="text" class="in-name" data-field="name" value="${esc(s.name)}" placeholder="Optional" maxlength="24" autocomplete="given-name"></label>
       </section>
@@ -685,9 +712,10 @@
 
       <h3 class="section-title">How scoring works</h3>
       <section class="card rules">
-        <div class="rule"><span class="rule-xp good">+${RULES.fastXp}</span><span>Up within ${RULES.fastMin} min of your alarm</span></div>
-        <div class="rule"><span class="rule-xp good">+${RULES.okXp}</span><span>Up within ${RULES.okMin} min</span></div>
-        <div class="rule"><span class="rule-xp good">+${RULES.lateXp}</span><span>Up later — it still counts</span></div>
+        ${(() => { const a = at(keyOf(now()), s.wakeTimes[1]), f = (m) => fmtTime(a + m * MIN); return `
+        <div class="rule"><span class="rule-xp good">+${RULES.fastXp}</span><span>Up within ${RULES.fastMin} min of your alarm (${f(0)} alarm → by ${f(RULES.fastMin)})</span></div>
+        <div class="rule"><span class="rule-xp good">+${RULES.okXp}</span><span>Up by ${f(RULES.okMin)}</span></div>
+        <div class="rule"><span class="rule-xp good">+${RULES.lateXp}</span><span>${f(RULES.okMin + 1)} or later — it still counts</span></div>`; })()}
         ${S.settings.tasks.map((t) => `<div class="rule"><span class="rule-xp good">+${t.xp || 0}</span><span>${esc(t.emoji)} ${esc(t.label)} — done or not</span></div>`).join('')}
         <div class="rule"><span class="rule-xp">${perfectDay()}</span><span>A perfect morning · ${perfectDay() * 5} a perfect week</span></div>
         <div class="rule"><span class="rule-xp bad">−${RULES.penalty}</span><span>Stationary ${RULES.idleMin}+ min before everything’s done (once a morning, max)</span></div>
@@ -767,9 +795,9 @@
       const d = S.days[k];
       if (!(d && d.upAt)) {
         const target = targetFor(k);
-        add(target, '☀️ Time to get up!', `Up within ${RULES.fastMin} min = +${RULES.fastXp} ${U()}. Tap “I’m up” once your feet hit the floor.`);
-        add(target + (RULES.fastMin - 1) * MIN, `⏰ 1 minute left for +${RULES.fastXp} ${U()}`, 'Feet on the floor, then tap “I’m up”.');
-        add(target + (RULES.okMin - 1) * MIN, `⏰ 1 minute left for +${RULES.okXp} ${U()}`, 'Up you get — it still counts.');
+        add(target, '☀️ Time to get up!', `Up by ${fmtTime(target + RULES.fastMin * MIN)} = +${RULES.fastXp} ${U()}. Tap “I’m up” once your feet hit the floor.`);
+        add(target + RULES.fastMin * MIN, `⏰ 1 minute left for +${RULES.fastXp} ${U()}`, 'Feet on the floor, then tap “I’m up”.');
+        add(target + RULES.okMin * MIN, `⏰ 1 minute left for +${RULES.okXp} ${U()}`, 'Up you get — it still counts.');
       }
       if (isFriday(dayT) && !S.checkins.some((c) => c.date === k)) {
         add(at(k, S.settings.checkinTime), '🎁 Friday check-in — the store is open',
@@ -938,9 +966,9 @@
   function getUp() {
     const t = now(), k = keyOf(t);
     if (!isWeekday(t)) return;
-    const d = S.days[k] || (S.days[k] = newDay(S.settings.wakeTime));
+    const d = S.days[k] || (S.days[k] = newDay(alarmFor(k)));
     if (d.upAt) return;
-    const target = at(k, d.target || S.settings.wakeTime);
+    const target = targetFor(k);
     if (t < target - RULES.earliestMin * MIN) { toast('A bit early — this unlocks 3 hours before your alarm.'); return; }
     d.steps = currentSteps();
     d.upAt = t; d.done = { up: t }; d.last = t;
@@ -1004,7 +1032,7 @@
   }
   function openChangeTarget() {
     const k = keyOf(now());
-    const cur = (S.days[k] && S.days[k].target) || S.settings.wakeTime;
+    const cur = (S.days[k] && S.days[k].target) || alarmFor(k);
     sheet(`<div class="sheet-head"><h2>Today’s alarm</h2>${closeX}</div>
       <p class="muted">Different alarm today? Your wake-up score uses this time — just for today.</p>
       <input type="time" id="target-in" class="in-lg" value="${cur}">
@@ -1013,11 +1041,16 @@
   function saveTarget() {
     const v = $('#target-in').value;
     if (!validHHMM(v)) return;
+    closeSheet();
+    setTodayAlarm(v);
+  }
+  function setTodayAlarm(v) {
+    if (!validHHMM(v)) return;
     const k = keyOf(now());
     const d = S.days[k] || (S.days[k] = newDay(v));
+    if (d.upAt) return;
     d.target = v;
     save();
-    closeSheet();
     render();
     toast(`Today’s alarm: ${fmtHHMM(v)}`);
   }
@@ -1164,7 +1197,7 @@
   }
   function onFieldChange(el) {
     const f = el.dataset.field;
-    if (f === 'wakeTime' || f === 'checkinTime') {
+    if (f === 'checkinTime') {
       if (!validHHMM(el.value)) return;
       S.settings[f] = el.value;
       save();
@@ -1173,11 +1206,23 @@
       const sum = $('#remind-summary');
       if (sum) sum.textContent = remindersSummary();
       queueNativeSync();
-      toast(f === 'wakeTime' ? `Weekday alarm set to ${fmtHHMM(el.value)}` : `Friday reminder at ${fmtHHMM(el.value)}`);
+      toast(`Friday reminder at ${fmtHHMM(el.value)}`);
     } else if (f === 'name') {
       S.settings.name = el.value.trim().slice(0, 24);
       save();
     }
+  }
+  function onWakeDayChange(el) {
+    const dd = Number(el.dataset.wakeday);
+    if (!(dd >= 1 && dd <= 5) || !validHHMM(el.value)) return;
+    S.settings.wakeTimes[dd] = el.value;
+    save();
+    const box = $('#cal-btns');
+    if (box) box.innerHTML = calButtons();
+    const sum = $('#remind-summary');
+    if (sum) sum.textContent = remindersSummary();
+    queueNativeSync();
+    toast(`${DAY_NAMES[dd]} alarm: ${fmtHHMM(el.value)}`);
   }
   function onItemChange(el, list, id) {
     const item = list.find((x) => x.id === id);
@@ -1213,8 +1258,8 @@
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
   function downloadCal(kind) {
-    const hhmm = kind === 'wake' ? S.settings.wakeTime : S.settings.checkinTime;
-    const ics = SunupICS.build(kind, hhmm, location.origin + location.pathname);
+    const times = kind === 'wake' ? S.settings.wakeTimes : S.settings.checkinTime;
+    const ics = SunupICS.build(kind, times, location.origin + location.pathname);
     downloadBlob(new Blob([ics], { type: 'text/calendar;charset=utf-8' }), `sunup-${kind}.ics`);
   }
   function exportData() {
@@ -1268,17 +1313,18 @@
       <h2>Welcome to Sunup</h2>
       <p class="muted" style="margin-top:4px">Your weekday mornings, turned into a game.</p>
       <ol class="onb-steps">
-        <li><span>⏰</span><div><b>Get up fast</b><small>Up within 5 min of your alarm = +10 XP · within 10 = +5 · later = +1.</small></div></li>
+        <li><span>⏰</span><div><b>Get up fast</b><small>Alarm at 7:25 → up by 7:35 = +10 XP · by 7:49 = +5 · 7:50 or later = +1. Same idea for any alarm time.</small></div></li>
         <li><span>✅</span><div><b>Keep moving</b><small>${S.settings.tasks.map((t) => `${esc(t.label)} +${t.xp || 0}`).join(' · ')}. Stationary 10+ min before you’re done = −5.</small></div></li>
         <li><span>🎁</span><div><b>Cash out on Fridays</b><small>Check in, bank your XP, spend it in the store. XP carries over.</small></div></li>
       </ol>
-      <label class="onb-time"><span>Your weekday alarm</span><input type="time" id="onb-wake" value="${S.settings.wakeTime}"></label>
+      <label class="onb-time"><span>Your usual weekday alarm</span><input type="time" id="onb-wake" value="${S.settings.wakeTimes[1]}"></label>
+      <p class="muted small" style="margin:-6px 0 16px">Different on some days? Set each day in Settings, or tap 6:25 / 7:25 on the morning.</p>
       <button class="btn btn-primary btn-xl" data-action="finish-onboarding">Let’s go</button>
     </div>`, { dismissable: false });
   }
   function finishOnboarding() {
     const v = $('#onb-wake') && $('#onb-wake').value;
-    if (validHHMM(v)) S.settings.wakeTime = v;
+    if (validHHMM(v)) for (const dd of [1, 2, 3, 4, 5]) S.settings.wakeTimes[dd] = v;
     S.onboarded = true;
     save();
     closeSheet();
@@ -1304,6 +1350,7 @@
     'waive-penalty': waivePenalty,
     'change-target': openChangeTarget,
     'save-target': saveTarget,
+    'pick-alarm': (el) => setTodayAlarm(el.dataset.time),
     'open-checkin': openCheckin,
     mood: (el) => { moodPick = Number(el.dataset.i); $$('.mood-btn').forEach((b) => b.classList.toggle('is-on', b === el)); },
     collect,
@@ -1334,6 +1381,7 @@
   document.addEventListener('change', (e) => {
     const el = e.target;
     if (el.dataset.field) onFieldChange(el);
+    else if (el.dataset.wakeday) onWakeDayChange(el);
     else if (el.dataset.task) onItemChange(el, S.settings.tasks, el.dataset.task);
     else if (el.dataset.reward) onItemChange(el, S.settings.rewards, el.dataset.reward);
   });

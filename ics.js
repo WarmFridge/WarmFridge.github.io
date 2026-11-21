@@ -23,48 +23,53 @@
     return out + cur;
   }
 
+  var BYDAY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+
   /**
-   * kind: 'wake' (Mon–Fri) or 'friday' (Fridays). hhmm: '07:00'.
+   * kind: 'wake' (weekdays) or 'friday' (Fridays).
+   * times: '07:25', or for 'wake' a map of weekday → time, e.g. {1:'07:25', 2:'06:25', …, 5:'07:25'}.
    * Times are "floating" (no time zone), so they follow the phone's local time.
    */
-  function build(kind, hhmm, appUrl) {
-    var parts = String(hhmm).split(':');
-    var h = Number(parts[0]) || 0, m = Number(parts[1]) || 0;
+  function build(kind, times, appUrl) {
     var wake = kind === 'wake';
     var url = appUrl || APP_URL;
-    // Anchor dates: Mon 16 Nov 2026 (weekday series) and Fri 20 Nov 2026 (Friday series).
-    var start = (wake ? '20261116' : '20261120') + 'T' + pad(h) + pad(m) + '00';
+    var map = typeof times === 'string' ? (wake ? { 1: times, 2: times, 3: times, 4: times, 5: times } : { 5: times }) : times;
+    var groups = {};
+    Object.keys(map).sort().forEach(function (d) { (groups[map[d]] = groups[map[d]] || []).push(Number(d)); });
+    var hhmms = Object.keys(groups).sort();
 
-    var summary = wake ? '☀️ Sunup — get up! Up in 5 = +10' : '🎁 Sunup — Friday check-in. Store is open!';
+    var summary = wake ? '☀️ Sunup — get up! Up within 10 min = +10' : '🎁 Sunup — Friday check-in. Store is open!';
     var desc = wake
-      ? 'Open Sunup and tap “I’m up”.\nUp within 5 min = +10 · within 10 min = +5 · later = +1.\nThen keep moving: 10 min stuck before you’re done = −5.\n' + url
+      ? 'Open Sunup and tap “I’m up”.\nUp within 10 min of your alarm = +10 · within 24 min = +5 · later = +1.\nThen keep moving: 10 min stuck before you’re done = −5.\n' + url
       : 'Open Sunup, collect your week of XP and cash out in the store. XP carries over.\n' + url;
-    var alarm = wake ? 'Get up now — +10 for the next 5 minutes' : 'Friday check-in — collect your XP, the store is open';
+    var alarm = wake ? 'Get up now — +10 for the next 10 minutes' : 'Friday check-in — collect your XP, the store is open';
 
-    var lines = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//Sunup//Morning XP//EN',
-      'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH',
-      'BEGIN:VEVENT',
-      'UID:sunup-' + kind + '@warmfridge.github.io',
-      'DTSTAMP:20261121T000000Z',
-      'DTSTART:' + start,
-      'DURATION:PT15M',
-      wake ? 'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR' : 'RRULE:FREQ=WEEKLY;BYDAY=FR',
-      'SUMMARY:' + text(summary),
-      'DESCRIPTION:' + text(desc),
-      'URL:' + url,
-      'TRANSP:TRANSPARENT',
-      'BEGIN:VALARM',
-      'ACTION:DISPLAY',
-      'DESCRIPTION:' + text(alarm),
-      'TRIGGER:PT0S',
-      'END:VALARM',
-      'END:VEVENT',
-      'END:VCALENDAR'
-    ];
+    var lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Sunup//Morning XP//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
+    hhmms.forEach(function (hhmm) {
+      var p = String(hhmm).split(':'), h = Number(p[0]) || 0, m = Number(p[1]) || 0;
+      var days = groups[hhmm];
+      // Anchor in the week of Mon 16 Nov 2026 on the first day of this group.
+      var start = '202611' + pad(15 + days[0]) + 'T' + pad(h) + pad(m) + '00';
+      lines.push(
+        'BEGIN:VEVENT',
+        'UID:sunup-' + kind + (hhmms.length > 1 ? '-' + pad(h) + pad(m) : '') + '@warmfridge.github.io',
+        'DTSTAMP:20261121T000000Z',
+        'DTSTART:' + start,
+        'DURATION:PT15M',
+        'RRULE:FREQ=WEEKLY;BYDAY=' + days.map(function (d) { return BYDAY[d]; }).join(','),
+        'SUMMARY:' + text(summary),
+        'DESCRIPTION:' + text(desc),
+        'URL:' + url,
+        'TRANSP:TRANSPARENT',
+        'BEGIN:VALARM',
+        'ACTION:DISPLAY',
+        'DESCRIPTION:' + text(alarm),
+        'TRIGGER:PT0S',
+        'END:VALARM',
+        'END:VEVENT'
+      );
+    });
+    lines.push('END:VCALENDAR');
     return lines.map(fold).join('\r\n') + '\r\n';
   }
 

@@ -261,6 +261,12 @@ h2 { font-size: 22px; line-height: 1.2; font-weight: 800; letter-spacing: -.02em
 .hero-line { margin: 16px 0 18px; color: var(--muted); font-size: 16px; }
 .hero-line b { color: var(--text); font-family: var(--font-round); font-variant-numeric: tabular-nums; }
 
+.alarm-pick { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 16px; }
+.alarm-pick > span { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 650; color: var(--muted); }
+.alarm-pick > span .ic { width: 15px; height: 15px; }
+.alarm-pick .seg button { font-variant-numeric: tabular-nums; }
+.alarm-pick .seg button.is-on { color: var(--accent); }
+.row.tight { min-height: 48px; padding-top: 8px; padding-bottom: 8px; }
 .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .tier {
   background: var(--surface); border: 1px solid var(--border); border-radius: 14px;

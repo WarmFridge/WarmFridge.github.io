@@ -9,9 +9,9 @@ Get up fast, keep moving, earn XP Monday–Friday, then check in and cash out in
 
 | | |
 |---|---|
-| **+10 XP** | Up within 5 min of your alarm |
-| **+5 XP** | Up within 10 min |
-| **+1 XP** | Up later. It still counts |
+| **+10 XP** | Up within 10 min of that day's alarm (7:25 alarm → by 7:35) |
+| **+5 XP** | Up by 7:49 |
+| **+1 XP** | 7:50 or later. It still counts |
 | **+3 XP** | 💇 Hair (done or not) |
 | **+3 XP** | 🧼 Wash face |
 | **+3 XP** | 🪥 Brush teeth |
@@ -21,6 +21,7 @@ Get up fast, keep moving, earn XP Monday–Friday, then check in and cash out in
 A perfect morning is **21 XP**, so a perfect week is **105 XP**. Cash out $100 and 5 XP carries over.
 
 - Routine: 🛏️ Get out of bed → 💇 Hair → 🧼 Wash face → 🪥 Brush teeth → 🍳 Eat something. Steps and their points can be edited in Settings.
+- Each weekday has its own alarm (e.g. 7:25 or 6:25), set in Settings. On a morning that's different, tap 6:25 / 7:25 on the Today screen.
 - Tracked **Monday–Friday** only. Weekends never break your streak.
 - **Friday check-in:** look back at the week and bank your XP.
 - **Store opens on Fridays only.** XP carries over forever.

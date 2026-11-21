@@ -1,5 +1,5 @@
 /* Sunup service worker: offline support + notification taps. */
-const CACHE = 'sunup-v4';
+const CACHE = 'sunup-v5';
 const ASSETS = [
   './',
   'index.html',
