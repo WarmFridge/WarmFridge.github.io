@@ -20,9 +20,10 @@
 
   const WAKE_STEP = { id: 'up', emoji: '🛏️', label: 'Get out of bed' };
   const DEFAULT_TASKS = [
-    { id: 'hair', emoji: '💇', label: 'Hair', xp: 4 },
-    { id: 'face', emoji: '🧼', label: 'Wash face', xp: 4 },
-    { id: 'eat', emoji: '🍳', label: 'Eat something', xp: 3 },
+    { id: 'hair', emoji: '💇', label: 'Hair', xp: 3 },
+    { id: 'face', emoji: '🧼', label: 'Wash face', xp: 3 },
+    { id: 'teeth', emoji: '🪥', label: 'Brush teeth', xp: 3 },
+    { id: 'eat', emoji: '🍳', label: 'Eat something', xp: 2 },
   ];
   // Points for a routine step that predates per-step points.
   const defaultStepXp = (id) => { const t = DEFAULT_TASKS.find((x) => x.id === id); return t ? t.xp : 3; };
@@ -78,7 +79,7 @@
   const clone = (o) => JSON.parse(JSON.stringify(o));
   function fresh() {
     return {
-      v: 1, onboarded: false, bank: 0, days: {}, checkins: [], redemptions: [], createdAt: Date.now(),
+      v: 1, routineV: 2, onboarded: false, bank: 0, days: {}, checkins: [], redemptions: [], createdAt: Date.now(),
       settings: {
         name: '', wakeTime: '07:00', checkinTime: '17:00', theme: 'midnight',
         sound: true, alerts: false, unit: 'xp',
@@ -92,6 +93,17 @@
     s.settings = Object.assign(base.settings, s.settings || {});
     if (!Array.isArray(s.settings.tasks)) s.settings.tasks = base.settings.tasks;
     for (const t of s.settings.tasks) if (typeof t.xp !== 'number') t.xp = defaultStepXp(t.id);
+    if ((s.routineV || 1) < 2) {
+      // Routine v2: add "Brush teeth" and rebalance so a perfect morning is still 21 (105 a week).
+      const tasks = s.settings.tasks;
+      const oldDefault = { hair: 4, face: 4, eat: 3 };
+      for (const t of tasks) if (oldDefault[t.id] === t.xp) t.xp = defaultStepXp(t.id);
+      if (!tasks.some((t) => t.id === 'teeth')) {
+        const at = tasks.findIndex((t) => t.id === 'face');
+        tasks.splice(at < 0 ? tasks.length : at + 1, 0, clone(DEFAULT_TASKS.find((t) => t.id === 'teeth')));
+      }
+      s.routineV = 2;
+    }
     if (!Array.isArray(s.settings.rewards)) s.settings.rewards = base.settings.rewards;
     s.days = s.days && typeof s.days === 'object' ? s.days : {};
     for (const d of Object.values(s.days)) {
@@ -1257,7 +1269,7 @@
       <p class="muted" style="margin-top:4px">Your weekday mornings, turned into a game.</p>
       <ol class="onb-steps">
         <li><span>⏰</span><div><b>Get up fast</b><small>Up within 5 min of your alarm = +10 XP · within 10 = +5 · later = +1.</small></div></li>
-        <li><span>✅</span><div><b>Keep moving</b><small>Hair +4 · face +4 · food +3. Stationary 10+ min before you’re done = −5.</small></div></li>
+        <li><span>✅</span><div><b>Keep moving</b><small>${S.settings.tasks.map((t) => `${esc(t.label)} +${t.xp || 0}`).join(' · ')}. Stationary 10+ min before you’re done = −5.</small></div></li>
         <li><span>🎁</span><div><b>Cash out on Fridays</b><small>Check in, bank your XP, spend it in the store. XP carries over.</small></div></li>
       </ol>
       <label class="onb-time"><span>Your weekday alarm</span><input type="time" id="onb-wake" value="${S.settings.wakeTime}"></label>
@@ -1351,6 +1363,7 @@
   }
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
+  if (S.onboarded) save(); // persist any upgrade normalize() just applied
   render();
   animateIn();
   setInterval(tick, 1000);
