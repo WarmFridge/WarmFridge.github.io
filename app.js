@@ -20,10 +20,12 @@
 
   const WAKE_STEP = { id: 'up', emoji: '🛏️', label: 'Get out of bed' };
   const DEFAULT_TASKS = [
-    { id: 'hair', emoji: '💇', label: 'Hair' },
-    { id: 'face', emoji: '🧼', label: 'Wash face' },
-    { id: 'eat', emoji: '🍳', label: 'Eat something' },
+    { id: 'hair', emoji: '💇', label: 'Hair', xp: 4 },
+    { id: 'face', emoji: '🧼', label: 'Wash face', xp: 4 },
+    { id: 'eat', emoji: '🍳', label: 'Eat something', xp: 3 },
   ];
+  // Points for a routine step that predates per-step points.
+  const defaultStepXp = (id) => { const t = DEFAULT_TASKS.find((x) => x.id === id); return t ? t.xp : 3; };
   const DEFAULT_REWARDS = [
     { id: 'food', emoji: '🍜', label: 'Food treat', cost: 25 },
     { id: 'toys', emoji: '🧩', label: 'Toys & board games', cost: 50 },
@@ -89,8 +91,12 @@
     if (!s || typeof s !== 'object') return base;
     s.settings = Object.assign(base.settings, s.settings || {});
     if (!Array.isArray(s.settings.tasks)) s.settings.tasks = base.settings.tasks;
+    for (const t of s.settings.tasks) if (typeof t.xp !== 'number') t.xp = defaultStepXp(t.id);
     if (!Array.isArray(s.settings.rewards)) s.settings.rewards = base.settings.rewards;
     s.days = s.days && typeof s.days === 'object' ? s.days : {};
+    for (const d of Object.values(s.days)) {
+      for (const st of d.steps || []) if (st.id !== 'up' && typeof st.xp !== 'number') st.xp = defaultStepXp(st.id);
+    }
     s.checkins = Array.isArray(s.checkins) ? s.checkins : [];
     s.redemptions = Array.isArray(s.redemptions) ? s.redemptions : [];
     s.bank = Math.max(0, Number(s.bank) || 0);
@@ -174,8 +180,10 @@
     if (e <= RULES.okMin * MIN) return { phase: 'ok', xp: RULES.okXp, remaining: RULES.okMin * MIN - e, total: (RULES.okMin - RULES.fastMin) * MIN };
     return { phase: 'late', xp: RULES.lateXp, remaining: 0, total: 0 };
   }
-  const net = (d) => (d.wakeXp || 0) - (d.penalty || 0);
-  const currentSteps = () => [WAKE_STEP, ...S.settings.tasks].map((s) => ({ id: s.id, emoji: s.emoji, label: s.label }));
+  const stepXp = (d) => (d.steps || []).reduce((a, s) => a + (s.id !== 'up' && d.done && d.done[s.id] ? s.xp || 0 : 0), 0);
+  const net = (d) => (d.wakeXp || 0) + stepXp(d) - (d.penalty || 0);
+  const currentSteps = () => [WAKE_STEP, ...S.settings.tasks].map((s) => ({ id: s.id, emoji: s.emoji, label: s.label, xp: s.id === 'up' ? 0 : s.xp || 0 }));
+  const perfectDay = () => RULES.fastXp + S.settings.tasks.reduce((a, t) => a + (t.xp || 0), 0);
   const newDay = (target) => ({ target, steps: currentSteps(), done: {}, upAt: null, wakeXp: 0, last: null, penalty: 0, penaltyAt: null, completeAt: null, collected: 0 });
   const nextStep = (d) => d.steps.find((s) => !d.done[s.id]);
   const allDone = (d) => d.steps.every((s) => d.done[s.id]);
@@ -186,7 +194,7 @@
   const lifetimeXp = () => Object.values(S.days).reduce((a, d) => a + Math.max(0, net(d)), 0);
   const morningsDone = () => Object.values(S.days).filter((d) => d.completeAt).length;
   const checkedInToday = () => S.checkins.some((c) => c.date === keyOf(now()));
-  const threshold = (L) => (25 * (L - 1) * L) / 2; // 0, 25, 75, 150, 250, 375…
+  const threshold = (L) => (50 * (L - 1) * L) / 2; // 0, 50, 150, 300, 500, 750…
   function levelOf(xp) { let L = 1; while (xp >= threshold(L + 1)) L++; return L; }
   const levelName = (L) => LEVEL_NAMES[Math.min(L, LEVEL_NAMES.length) - 1];
   function streakNow() {
@@ -338,7 +346,7 @@
       <div class="steps is-preview">${steps.map((s, i) => `
         <div class="step ${i === 0 ? 'is-next' : ''}">
           <span class="check"></span><span class="emoji">${esc(s.emoji)}</span>
-          <span class="label">${esc(s.label)}</span>${i === 0 ? '<span class="meta">Tap “I’m up”</span>' : ''}
+          <span class="label">${esc(s.label)}</span><span class="meta">${i === 0 ? 'Tap “I’m up”' : `+${s.xp}`}</span>
         </div>`).join('')}
       </div>`;
   }
@@ -368,8 +376,9 @@
       const done = d.done[s.id];
       let meta = '';
       if (s.id === 'up' && done) meta = `${fmtTime(d.upAt)} · +${d.wakeXp}`;
-      else if (done) meta = fmtTime(done);
-      else if (next && next.id === s.id) meta = 'Up next';
+      else if (done) meta = `${fmtTime(done)} · +${s.xp || 0}`;
+      else if (next && next.id === s.id) meta = `Up next · +${s.xp || 0}`;
+      else meta = `+${s.xp || 0}`;
       const cls = ['step', done ? 'is-done' : '', next && next.id === s.id ? 'is-next' : '', justDone === s.id ? 'just-done' : ''].join(' ');
       return `<button class="${cls}" data-action="step" data-id="${esc(s.id)}" aria-pressed="${done ? 'true' : 'false'}">
         <span class="check">${done ? I('check') : ''}</span><span class="emoji">${esc(s.emoji)}</span>
@@ -446,7 +455,7 @@
       <section class="card">
         ${weekStrip(mk)}
         <div class="sum3">
-          <div><b class="num">${signed(earned) || '0'}</b><span>${U()} earned</span></div>
+          <div><b class="num">${signed(earned) || '0'}</b><span>of ${perfectDay() * 5} ${U()}</span></div>
           <div><b class="num">${done}/5</b><span>mornings done</span></div>
           <div><b class="num">${stalls}</b><span>${stalls === 1 ? 'stall' : 'stalls'}</span></div>
         </div>
@@ -621,14 +630,18 @@
 
       <h3 class="section-title">Morning routine</h3>
       <section class="card list">
-        <div class="edit-row"><span class="emoji-static">🛏️</span><span class="grow fixed-label"><b>Get out of bed</b><small>Always step 1 · scored against your alarm</small></span></div>
+        <div class="edit-row"><span class="emoji-static">🛏️</span><span class="grow fixed-label"><b>Get out of bed</b><small>Always step 1 · +${RULES.fastXp} / +${RULES.okXp} / +${RULES.lateXp} by how fast</small></span></div>
         ${s.tasks.map((t, i) => `
-          <div class="edit-row">
+          <div class="edit-row wrap">
             <input class="emoji-in" type="text" data-task="${esc(t.id)}" data-prop="emoji" value="${esc(t.emoji)}" aria-label="Emoji">
             <input class="grow" type="text" data-task="${esc(t.id)}" data-prop="label" value="${esc(t.label)}" maxlength="40" aria-label="Step name">
-            <button class="icon-btn" data-action="move-task" data-id="${esc(t.id)}" data-dir="-1" aria-label="Move up" ${i === 0 ? 'disabled' : ''}>${I('up')}</button>
-            <button class="icon-btn" data-action="move-task" data-id="${esc(t.id)}" data-dir="1" aria-label="Move down" ${i === s.tasks.length - 1 ? 'disabled' : ''}>${I('down')}</button>
-            <button class="icon-btn" data-action="del-task" data-id="${esc(t.id)}" aria-label="Remove step">${I('trash')}</button>
+            <div class="edit-tools">
+              <label class="cost-wrap">+<input class="cost-in xp-in" type="number" inputmode="numeric" min="0" max="50" data-task="${esc(t.id)}" data-prop="xp" value="${t.xp || 0}" aria-label="Points"><small>${U()} when done</small></label>
+              <span class="spacer"></span>
+              <button class="icon-btn" data-action="move-task" data-id="${esc(t.id)}" data-dir="-1" aria-label="Move up" ${i === 0 ? 'disabled' : ''}>${I('up')}</button>
+              <button class="icon-btn" data-action="move-task" data-id="${esc(t.id)}" data-dir="1" aria-label="Move down" ${i === s.tasks.length - 1 ? 'disabled' : ''}>${I('down')}</button>
+              <button class="icon-btn" data-action="del-task" data-id="${esc(t.id)}" aria-label="Remove step">${I('trash')}</button>
+            </div>
           </div>`).join('')}
         <button class="row add-row" data-action="add-task">${I('plus')} Add a step</button>
       </section>
@@ -637,11 +650,14 @@
       <h3 class="section-title">Rewards</h3>
       <section class="card list">
         ${s.rewards.map((r) => `
-          <div class="edit-row">
+          <div class="edit-row wrap">
             <input class="emoji-in" type="text" data-reward="${esc(r.id)}" data-prop="emoji" value="${esc(r.emoji)}" aria-label="Emoji">
             <input class="grow" type="text" data-reward="${esc(r.id)}" data-prop="label" value="${esc(r.label)}" maxlength="48" aria-label="Reward name">
-            <span class="cost-wrap">${I('bolt')}<input class="cost-in" type="number" inputmode="numeric" min="1" max="9999" data-reward="${esc(r.id)}" data-prop="cost" value="${r.cost}" aria-label="Cost"></span>
-            <button class="icon-btn" data-action="del-reward" data-id="${esc(r.id)}" aria-label="Remove reward">${I('trash')}</button>
+            <div class="edit-tools">
+              <label class="cost-wrap">${I('bolt')}<input class="cost-in" type="number" inputmode="numeric" min="1" max="9999" data-reward="${esc(r.id)}" data-prop="cost" value="${r.cost}" aria-label="Cost"><small>${U()} to cash out</small></label>
+              <span class="spacer"></span>
+              <button class="icon-btn" data-action="del-reward" data-id="${esc(r.id)}" aria-label="Remove reward">${I('trash')}</button>
+            </div>
           </div>`).join('')}
         <button class="row add-row" data-action="add-reward">${I('plus')} Add a reward</button>
       </section>
@@ -660,6 +676,8 @@
         <div class="rule"><span class="rule-xp good">+${RULES.fastXp}</span><span>Up within ${RULES.fastMin} min of your alarm</span></div>
         <div class="rule"><span class="rule-xp good">+${RULES.okXp}</span><span>Up within ${RULES.okMin} min</span></div>
         <div class="rule"><span class="rule-xp good">+${RULES.lateXp}</span><span>Up later — it still counts</span></div>
+        ${S.settings.tasks.map((t) => `<div class="rule"><span class="rule-xp good">+${t.xp || 0}</span><span>${esc(t.emoji)} ${esc(t.label)} — done or not</span></div>`).join('')}
+        <div class="rule"><span class="rule-xp">${perfectDay()}</span><span>A perfect morning · ${perfectDay() * 5} a perfect week</span></div>
         <div class="rule"><span class="rule-xp bad">−${RULES.penalty}</span><span>Stationary ${RULES.idleMin}+ min before everything’s done (once a morning, max)</span></div>
         <div class="rule"><span class="rule-xp">🗓️</span><span>Tracked Monday–Friday. Weekends are off.</span></div>
         <div class="rule"><span class="rule-xp">🎁</span><span>Check in on Friday to bank your ${U()}. The store only opens on Fridays. ${U()} carries over forever.</span></div>
@@ -959,6 +977,8 @@
       toast(`Morning done! ${signed(net(d))} ${U()} today 🎉`);
     } else if (justDone || d.done[id]) {
       chime('tick');
+      const st = d.steps.find((x) => x.id === id);
+      if (d.done[id] && st && st.xp) floatXp(`+${st.xp} ${U()}`);
       buzz(20);
     }
   }
@@ -1163,6 +1183,11 @@
       if (!(n >= 1)) { el.value = item.cost; return; }
       item.cost = Math.min(9999, n);
       el.value = item.cost;
+    } else if (prop === 'xp') {
+      const n = Math.round(Number(el.value));
+      if (!(n >= 0)) { el.value = item.xp; return; }
+      item.xp = Math.min(50, n);
+      el.value = item.xp;
     }
     save();
   }
@@ -1232,7 +1257,7 @@
       <p class="muted" style="margin-top:4px">Your weekday mornings, turned into a game.</p>
       <ol class="onb-steps">
         <li><span>⏰</span><div><b>Get up fast</b><small>Up within 5 min of your alarm = +10 XP · within 10 = +5 · later = +1.</small></div></li>
-        <li><span>✅</span><div><b>Keep moving</b><small>Hair, face, food. Stationary 10+ min before you’re done = −5.</small></div></li>
+        <li><span>✅</span><div><b>Keep moving</b><small>Hair +4 · face +4 · food +3. Stationary 10+ min before you’re done = −5.</small></div></li>
         <li><span>🎁</span><div><b>Cash out on Fridays</b><small>Check in, bank your XP, spend it in the store. XP carries over.</small></div></li>
       </ol>
       <label class="onb-time"><span>Your weekday alarm</span><input type="time" id="onb-wake" value="${S.settings.wakeTime}"></label>

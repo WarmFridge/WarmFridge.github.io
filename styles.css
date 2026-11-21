@@ -442,7 +442,14 @@ input[type="time"] { min-width: 112px; text-align: center; }
 .emoji-static { width: 48px; text-align: center; font-size: 22px; flex: none; }
 .cost-wrap { display: flex; align-items: center; gap: 4px; color: var(--xp); flex: none; }
 .cost-wrap .ic { width: 14px; height: 14px; }
-.cost-in { width: 66px; text-align: center; }
+.cost-in { width: 72px; text-align: center; }
+.xp-in { width: 56px; }
+.edit-row.wrap { flex-wrap: wrap; row-gap: 6px; padding-bottom: 8px; }
+.edit-tools { display: flex; align-items: center; gap: 4px; width: 100%; padding-left: 56px; }
+.edit-tools .spacer { flex: 1; }
+.edit-tools .cost-wrap { gap: 6px; font-weight: 800; }
+.edit-tools .cost-wrap small { color: var(--muted); font-size: 12px; font-weight: 600; }
+.edit-tools .cost-in { min-height: 34px; padding: 4px 6px; }
 
 .switch {
   width: 51px; height: 31px; border-radius: 99px; flex: none; position: relative;
