@@ -71,6 +71,7 @@
     calendar: '<rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/>',
     calPlus: '<rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18M12 13v6M9 16h6"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
+    phone: '<rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/>',
     leaf: '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>',
   };
   const I = (name, cls = '') =>
@@ -85,6 +86,7 @@
         name: '', checkinTime: '17:00', theme: 'midnight',
         wakeTimes: { 1: '07:25', 2: '07:25', 3: '07:25', 4: '07:25', 5: '07:25' }, // Mon–Fri alarms
         alarmChoices: ['06:25', '07:25'], // one-tap "Today's alarm" options
+        usePhoneAlarm: true, // Android app: score from the Clock app's alarm instead of ringing a second one
         sound: true, alerts: false, unit: 'xp',
         tasks: clone(DEFAULT_TASKS), rewards: clone(DEFAULT_REWARDS),
       },
@@ -156,6 +158,8 @@
   const APK_URL = 'https://github.com/WarmFridge/WarmFridge.github.io/releases/latest/download/sunup.apk';
   const LIGHT_THEMES = ['daylight', 'notebook', 'blossom'];
   let nativePerm = 'prompt';
+  // The phone's own alarms (Clock app), read through the native PhoneAlarm plugin.
+  let phoneLog = {}, phoneNext = null, phoneKnown = false, phoneCheckedAt = 0;
   function firstGrapheme(v) {
     v = String(v || '').trim();
     if (!v) return '';
@@ -215,7 +219,13 @@
   const allDone = (d) => d.steps.every((s) => d.done[s.id]);
   const idleLeft = (d, t = now()) => RULES.idleMin * MIN - (t - d.last);
   const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const alarmFor = (k) => { const w = S.settings.wakeTimes[dow(dateOfKey(k).getTime())]; return validHHMM(w) ? w : '07:25'; };
+  const phoneAlarmFor = (k) => (NATIVE && S.settings.usePhoneAlarm && validHHMM(phoneLog[k]) ? phoneLog[k] : null);
+  const alarmFor = (k) => {
+    const phone = phoneAlarmFor(k);
+    if (phone) return phone;
+    const w = S.settings.wakeTimes[dow(dateOfKey(k).getTime())];
+    return validHHMM(w) ? w : '07:25';
+  };
   const targetFor = (k) => at(k, (S.days[k] && S.days[k].target) || alarmFor(k));
   const alarmTimes = () => [...new Set([1, 2, 3, 4, 5].map((d) => S.settings.wakeTimes[d]))].sort();
 
@@ -372,7 +382,8 @@
   function alarmPicker(k) {
     const cur = (S.days[k] && S.days[k].target) || alarmFor(k);
     const choices = [...new Set([...S.settings.alarmChoices, ...alarmTimes(), cur])].filter(validHHMM).sort().slice(0, 4);
-    return `<div class="alarm-pick"><span>${I('clock')} Today’s alarm</span>
+    const fromPhone = !(S.days[k] && S.days[k].target) && phoneAlarmFor(k);
+    return `<div class="alarm-pick"><span>${fromPhone ? `${I('phone')} Today’s alarm · from your phone` : `${I('clock')} Today’s alarm`}</span>
       <div class="seg" role="group" aria-label="Today’s alarm">${choices.map((c) =>
         `<button class="${c === cur ? 'is-on' : ''}" data-action="pick-alarm" data-time="${c}" aria-pressed="${c === cur}">${fmtHHMM(c)}</button>`).join('')}
         <button data-action="change-target">Other</button></div></div>`;
@@ -449,7 +460,7 @@
     return `<section class="card weekend">
         <div class="weekend-ic">🌿</div>
         <h2>No tracking on weekends</h2>
-        <p>Rest up. Sunup is back Monday — alarm at ${fmtHHMM(S.settings.wakeTimes[1])}.</p>
+        <p>Rest up. Sunup is back Monday — alarm at ${fmtHHMM(alarmFor(addDays(keyOf(t), (8 - dow(t)) % 7 || 7)))}.</p>
       </section>
       ${p > 0 ? `<section class="card notice notice-info">${I('info')}<div><b>Your ${signed(p)} ${U()} is safe</b>
         <p>Missed Friday’s check-in? No stress — it rolls into next Friday.</p></div></section>` : ''}
@@ -615,8 +626,17 @@
     }).join('');
   }
   const remindersSummary = () =>
-    `Mon–Fri at your alarm (${alarmTimes().map(fmtHHMM).join(' or ')}): wake-up + “1 min left” nudges. Keep-moving nudges during your routine. ` +
+    (NATIVE && S.settings.usePhoneAlarm
+      ? 'Your phone’s alarm wakes you — no second alarm. If you haven’t tapped “I’m up”, Sunup nudges you in the last minute for +10 and for +5. '
+      : `Mon–Fri at your alarm (${alarmTimes().map(fmtHHMM).join(' or ')}): wake-up + “1 min left” nudges. `) +
+    'Keep-moving nudges during your routine. ' +
     `Fridays at ${fmtHHMM(S.settings.checkinTime)}: check-in. Rings even when Sunup is closed.`;
+  function phoneSummary() {
+    if (!S.settings.usePhoneAlarm) return 'Off — Sunup uses the alarm times below.';
+    if (!phoneKnown) return 'Checking your phone’s alarm…';
+    if (phoneNext) return `Next alarm: ${fmtDate(phoneNext, { weekday: 'short' })} ${fmtTime(phoneNext)}. Sunup scores from it, so only your Clock alarm rings.`;
+    return 'No alarm set on your phone right now — Sunup uses the times below until you set one.';
+  }
   function viewSettings() {
     const s = S.settings;
     const d = S.days[keyOf(now())];
@@ -632,7 +652,11 @@
 
       <h3 class="section-title">Morning</h3>
       <section class="card list">
-        <div class="row"><div class="row-main"><b>${I('clock')} Weekday alarms</b><span>Scoring counts from that day’s alarm. Different one morning? Tap it on the Today screen.</span></div></div>
+        ${NATIVE ? `<div class="row"><div class="row-main"><b>${I('phone')} Use my phone’s alarm</b><span id="phone-summary">${phoneSummary()}</span></div>
+          ${switchEl('phone', s.usePhoneAlarm, 'Use my phone’s alarm')}</div>` : ''}
+        <div class="row"><div class="row-main"><b>${I('clock')} ${NATIVE && s.usePhoneAlarm ? 'Backup alarm times' : 'Weekday alarms'}</b><span>${NATIVE && s.usePhoneAlarm
+          ? 'Used when your phone has no alarm for that morning.'
+          : 'Scoring counts from that day’s alarm. Different one morning? Tap it on the Today screen.'}</span></div></div>
         ${[1, 2, 3, 4, 5].map((dd) => `<label class="row tight"><div class="row-main"><b>${DAY_NAMES[dd]}</b></div>
           <input type="time" data-wakeday="${dd}" value="${s.wakeTimes[dd]}"></label>`).join('')}
         <label class="row"><div class="row-main"><b>Your name</b><span>For the greeting</span></div>
@@ -774,6 +798,7 @@
     }
     if (k !== lastKey) { lastKey = k; softRender(); return; }
     checkAlerts(t);
+    if (NATIVE && t - phoneCheckedAt > 5 * MIN) refreshPhoneAlarms();
     if (tab === 'today') {
       if (todaySig(t) !== liveSig) render();
       else updateLive(t);
@@ -795,7 +820,7 @@
       const d = S.days[k];
       if (!(d && d.upAt)) {
         const target = targetFor(k);
-        add(target, '☀️ Time to get up!', `Up by ${fmtTime(target + RULES.fastMin * MIN)} = +${RULES.fastXp} ${U()}. Tap “I’m up” once your feet hit the floor.`);
+        if (!(NATIVE && S.settings.usePhoneAlarm)) add(target, '☀️ Time to get up!', `Up by ${fmtTime(target + RULES.fastMin * MIN)} = +${RULES.fastXp} ${U()}. Tap “I’m up” once your feet hit the floor.`);
         add(target + RULES.fastMin * MIN, `⏰ 1 minute left for +${RULES.fastXp} ${U()}`, 'Feet on the floor, then tap “I’m up”.');
         add(target + RULES.okMin * MIN, `⏰ 1 minute left for +${RULES.okXp} ${U()}`, 'Up you get — it still counts.');
       }
@@ -811,6 +836,18 @@
       add(d.last + RULES.idleMin * MIN + 1500, `−${RULES.penalty} ${U()} — 10 minutes without a step`, `It happens. Shake it off — next up: ${label}.`);
     }
     return out.sort((a, b) => a.at - b.at).slice(0, 60).map((n, i) => ({ id: i + 1, ...n }));
+  }
+  async function refreshPhoneAlarms() {
+    if (!NATIVE) return;
+    phoneCheckedAt = now();
+    const r = NATIVE.phoneAlarms ? await NATIVE.phoneAlarms() : null; // null if it couldn't be read
+    const log = r && r.log && typeof r.log === 'object' ? r.log : {};
+    const next = r && typeof r.next === 'number' ? r.next : null;
+    const changed = !phoneKnown || next !== phoneNext || JSON.stringify(log) !== JSON.stringify(phoneLog);
+    phoneLog = log; phoneNext = next; phoneKnown = true;
+    const el = $('#phone-summary');
+    if (el) el.textContent = phoneSummary();
+    if (changed) { softRender(); queueNativeSync(true); }
   }
   let syncTimer = 0, lastSyncSig = '';
   function queueNativeSync(immediate) {
@@ -1117,6 +1154,14 @@
       if (S.settings.sound) chime('good');
       return;
     }
+    if (key === 'phone') {
+      S.settings.usePhoneAlarm = !S.settings.usePhoneAlarm;
+      save();
+      render();
+      queueNativeSync(true);
+      if (S.settings.usePhoneAlarm) refreshPhoneAlarms();
+      return;
+    }
     if (key === 'alerts' && NATIVE) {
       if (nativeAlertsOn()) {
         S.settings.alerts = false;
@@ -1317,6 +1362,7 @@
         <li><span>✅</span><div><b>Keep moving</b><small>${S.settings.tasks.map((t) => `${esc(t.label)} +${t.xp || 0}`).join(' · ')}. Stationary 10+ min before you’re done = −5.</small></div></li>
         <li><span>🎁</span><div><b>Cash out on Fridays</b><small>Check in, bank your XP, spend it in the store. XP carries over.</small></div></li>
       </ol>
+      ${NATIVE ? `<p class="onb-note">${I('phone')} Sunup reads the alarm on your phone, so only your Clock alarm rings. The time below is a backup.</p>` : ''}
       <label class="onb-time"><span>Your usual weekday alarm</span><input type="time" id="onb-wake" value="${S.settings.wakeTimes[1]}"></label>
       <p class="muted small" style="margin:-6px 0 16px">Different on some days? Set each day in Settings, or tap 6:25 / 7:25 on the morning.</p>
       <button class="btn btn-primary btn-xl" data-action="finish-onboarding">Let’s go</button>
@@ -1395,8 +1441,10 @@
 
   if (NATIVE) {
     NATIVE.permission().then((p) => { nativePerm = p; softRender(); queueNativeSync(true); });
+    refreshPhoneAlarms();
     NATIVE.onResume(() => {
       lastKey = keyOf(now());
+      refreshPhoneAlarms();
       NATIVE.permission().then((p) => { nativePerm = p; softRender(); queueNativeSync(true); });
     });
     // Android back: close a sheet → go to Today → leave the app.

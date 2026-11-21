@@ -565,6 +565,8 @@ input[type="time"] { min-width: 112px; text-align: center; }
 .onb-steps li > span { font-size: 26px; width: 36px; text-align: center; flex: none; }
 .onb-steps b { display: block; }
 .onb-steps small { display: block; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.onb-note { display: flex; gap: 8px; align-items: flex-start; text-align: left; font-size: 14px; color: var(--muted); background: var(--accent-soft); border-radius: 14px; padding: 10px 12px; margin-bottom: 12px; }
+.onb-note .ic { color: var(--accent); flex: none; margin-top: 1px; }
 .onb-time { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--surface-2); border-radius: 16px; padding: 12px 14px; margin-bottom: 16px; text-align: left; font-weight: 650; }
 .onb-time input { background: var(--surface); }
 

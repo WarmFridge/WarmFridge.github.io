@@ -45,6 +45,8 @@ Once it's on your Home Screen it opens full-screen and works offline. On iPhone,
 Download the latest build: **https://github.com/WarmFridge/WarmFridge.github.io/releases/latest/download/sunup.apk**
 
 Open that link on your Android phone, allow your browser to "install unknown apps" when asked, then tap Install.
+**It reads the alarm you already set in your phone's Clock app** (Settings → "Use my phone's alarm", on by default), so only one alarm rings. Sunup scores from that alarm and records each morning's time before it rings, so snoozing doesn't move the deadline. The backup alarm times in Settings are used when the phone has no alarm for a morning.
+
 The app version has real reminders that ring even when Sunup is closed. These are the wake-up at your alarm time, "1 minute left for +10", keep-moving nudges during the routine, and the Friday check-in.
 
 The APK is built automatically by GitHub Actions (`.github/workflows/android.yml`) every time the app changes.

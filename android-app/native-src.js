@@ -1,10 +1,13 @@
 /* Native (Android) bridge for Sunup. Bundled into www/native.js by scripts/prepare-www.js.
    app.js uses window.SunupNative when it exists; the website never loads this file. */
-import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
+import { Capacitor, SystemBars, SystemBarsStyle, registerPlugin } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { App } from '@capacitor/app';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+
+// Our own plugin (android/app/src/main/java/…/PhoneAlarmPlugin.java): reads the Clock app's alarm.
+const PhoneAlarm = registerPlugin('PhoneAlarm');
 
 const CHANNEL = 'sunup-reminders';
 let channelReady = null;
@@ -68,6 +71,11 @@ window.SunupNative = {
       })),
     });
     return { count: list.length, exact };
+  },
+
+  /** The phone's alarms: { next: epoch ms (if any), log: { 'YYYY-MM-DD': 'HH:MM' } } of mornings seen. */
+  async phoneAlarms() {
+    try { return await PhoneAlarm.read(); } catch (e) { return null; }
   },
 
   clearDelivered() {
