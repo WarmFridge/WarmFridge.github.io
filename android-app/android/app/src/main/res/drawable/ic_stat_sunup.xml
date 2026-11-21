@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar notification icon (Android only uses its shape). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M6.5,15.5a5.5,5.5 0,0 1,11 0z" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.8" android:strokeLineCap="round"
+        android:pathData="M12,5.2v2.3M5.6,8.4l1.6,1.6M18.4,8.4l-1.6,1.6M2.6,15.5h1.9M19.5,15.5h1.9M4,18.6h16" />
+    <path android:strokeColor="#99FFFFFF" android:strokeWidth="1.6" android:strokeLineCap="round"
+        android:pathData="M8,21.2h8" />
+</vector>

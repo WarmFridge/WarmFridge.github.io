@@ -120,6 +120,11 @@
   const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  // Inside the Android app, android-app/native-src.js provides real scheduled notifications.
+  const NATIVE = window.SunupNative && window.SunupNative.isNative ? window.SunupNative : null;
+  const APK_URL = 'https://github.com/WarmFridge/WarmFridge.github.io/releases/latest/download/sunup.apk';
+  const LIGHT_THEMES = ['daylight', 'notebook', 'blossom'];
+  let nativePerm = 'prompt';
   function firstGrapheme(v) {
     v = String(v || '').trim();
     if (!v) return '';
@@ -225,6 +230,7 @@
     renderChrome();
     liveSig = tab === 'today' ? todaySig(now()) : '';
     justDone = null;
+    queueNativeSync();
   }
   function renderChrome() {
     $('#tb-bank').textContent = S.bank;
@@ -239,11 +245,13 @@
     $('.tab[data-tab="week"] .dot').hidden = !(fri && (pendingXp() !== 0 || !checkedInToday()));
     $('.tab[data-tab="store"] .dot').hidden = !fri;
   }
+  let barTheme = '';
   function applyTheme() {
     const th = THEMES.find((x) => x.id === S.settings.theme) || THEMES[0];
     document.documentElement.dataset.theme = th.id;
     const m = $('meta[name="theme-color"]');
     if (m) m.setAttribute('content', th.c[0]);
+    if (NATIVE && barTheme !== th.id) { barTheme = th.id; NATIVE.setBarStyle(!LIGHT_THEMES.includes(th.id)); }
   }
   let enterTimer = 0;
   function animateIn() {
@@ -559,12 +567,19 @@
         : `<button class="cal-btn" data-action="cal" data-kind="${kind}">${inner}</button>`;
     }).join('');
   }
+  const remindersSummary = () =>
+    `Mon–Fri at ${fmtHHMM(S.settings.wakeTime)}: wake-up + “1 min left” nudges. Keep-moving nudges during your routine. ` +
+    `Fridays at ${fmtHHMM(S.settings.checkinTime)}: check-in. Rings even when Sunup is closed.`;
   function viewSettings() {
     const s = S.settings;
     const d = S.days[keyOf(now())];
     const inProgress = d && d.upAt && !d.completeAt;
+    const isAndroidWeb = !NATIVE && /Android/i.test(navigator.userAgent);
     return head('Make it yours', 'Settings') + `
-      ${isStandalone() ? '' : `<section class="card install"><span class="ci-icon">${I('share')}</span><div>
+      ${isAndroidWeb ? `<a class="card install" href="${APK_URL}"><span class="ci-icon">${I('download')}</span><div>
+        <b>Get the Android app</b>
+        <span>Reminders that ring even when Sunup is closed. Tip: Back up here first, then Restore inside the app to bring your XP.</span></div></a>` : ''}
+      ${NATIVE || isStandalone() || isAndroidWeb ? '' : `<section class="card install"><span class="ci-icon">${I('share')}</span><div>
         <b>Put Sunup on your Home Screen</b>
         <span>iPhone: tap Share → “Add to Home Screen”. Android: ⋮ menu → “Install app”. It opens full-screen, works offline, unlocks notifications on iPhone, and keeps your XP safe.</span></div></section>`}
 
@@ -577,7 +592,15 @@
       </section>
 
       <h3 class="section-title">Reminders</h3>
-      <section class="card list">
+      ${NATIVE ? `<section class="card list">
+        <div class="row"><div class="row-main"><b>${I('bell')} Reminders</b><span id="remind-summary">${remindersSummary()}</span></div>
+          ${switchEl('alerts', nativeAlertsOn(), 'Reminders')}</div>
+        ${S.settings.alerts && nativePerm === 'denied' ? `<div class="row"><div class="row-main"><span>Notifications are blocked for Sunup. Turn them on in Android Settings → Apps → Sunup → Notifications.</span></div></div>` : ''}
+        <label class="row"><div class="row-main"><b>Friday check-in time</b><span>When the Friday reminder rings</span></div>
+          <input type="time" data-field="checkinTime" value="${s.checkinTime}"></label>
+        <div class="row"><div class="row-main"><b>Sounds &amp; haptics</b><span>Little chimes when you tick things off</span></div>
+          ${switchEl('sound', s.sound, 'Sounds and haptics')}</div>
+      </section>` : `<section class="card list">
         <div class="row col"><div class="row-main"><b>${I('calendar')} Calendar alarms</b>
           <span>Reliable reminders even when Sunup is closed. Tap each once and choose “Add All”.</span></div>
           <div class="cal-grid" id="cal-btns">${calButtons()}</div></div>
@@ -587,7 +610,7 @@
           ${switchEl('alerts', s.alerts, 'Phone notifications')}</div>
         <div class="row"><div class="row-main"><b>Sounds &amp; haptics</b><span>Little chimes when you tick things off</span></div>
           ${switchEl('sound', s.sound, 'Sounds and haptics')}</div>
-      </section>
+      </section>`}
 
       <h3 class="section-title">Theme</h3>
       <section class="theme-grid">${THEMES.map((th) => `
@@ -701,12 +724,58 @@
   // Don't yank the keyboard away while someone is typing in Settings.
   function softRender() { if (tab === 'settings') renderChrome(); else render(); }
 
+  /* ---------- Android app: real scheduled notifications ---------- */
+  // Everything Sunup might want to tell you in the next 3 weeks, worked out from the current state.
+  // Re-planned after every change, so tapping "I'm up" or ticking a step cancels stale nudges.
+  function plannedNotifications() {
+    const t = now(), tk = keyOf(t), out = [];
+    const add = (when, title, body) => { if (when > t + 2000) out.push({ at: when, title, body }); };
+    const p = pendingXp();
+    for (let i = 0; i < 21; i++) {
+      const k = addDays(tk, i), dayT = dateOfKey(k).getTime();
+      if (!isWeekday(dayT)) continue;
+      const d = S.days[k];
+      if (!(d && d.upAt)) {
+        const target = targetFor(k);
+        add(target, '☀️ Time to get up!', `Up within ${RULES.fastMin} min = +${RULES.fastXp} ${U()}. Tap “I’m up” once your feet hit the floor.`);
+        add(target + (RULES.fastMin - 1) * MIN, `⏰ 1 minute left for +${RULES.fastXp} ${U()}`, 'Feet on the floor, then tap “I’m up”.');
+        add(target + (RULES.okMin - 1) * MIN, `⏰ 1 minute left for +${RULES.okXp} ${U()}`, 'Up you get — it still counts.');
+      }
+      if (isFriday(dayT) && !S.checkins.some((c) => c.date === k)) {
+        add(at(k, S.settings.checkinTime), '🎁 Friday check-in — the store is open',
+          p > 0 ? `Collect your ${signed(p)} ${U()} and treat yourself.` : 'Close out your week and visit the store.');
+      }
+    }
+    const d = S.days[tk];
+    if (isWeekday(t) && d && d.upAt && !d.completeAt && !d.penalty) {
+      const nx = nextStep(d), label = nx ? nx.label : 'your next step';
+      add(d.last + (RULES.idleMin - RULES.warnMin) * MIN, `⏱ ${RULES.warnMin} minutes to dodge −${RULES.penalty}`, `Next up: ${label}. Go go go!`);
+      add(d.last + RULES.idleMin * MIN + 1500, `−${RULES.penalty} ${U()} — 10 minutes without a step`, `It happens. Shake it off — next up: ${label}.`);
+    }
+    return out.sort((a, b) => a.at - b.at).slice(0, 60).map((n, i) => ({ id: i + 1, ...n }));
+  }
+  let syncTimer = 0, lastSyncSig = '';
+  function queueNativeSync(immediate) {
+    if (!NATIVE) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(syncNative, immediate ? 0 : 400);
+  }
+  async function syncNative() {
+    const list = S.settings.alerts && nativePerm === 'granted' ? plannedNotifications() : [];
+    const sig = JSON.stringify(list);
+    if (sig === lastSyncSig) return;
+    lastSyncSig = sig;
+    try { await NATIVE.schedule(list); } catch (e) { lastSyncSig = ''; }
+  }
+  const nativeAlertsOn = () => !!(NATIVE && S.settings.alerts && nativePerm === 'granted');
+
   /* ---------- Notifications, sound, haptics ---------- */
   const fired = new Set(JSON.parse(sessionStorage.getItem('sunup.fired') || '[]'));
   function alertUser(key, title, body) {
     if (fired.has(key)) return;
     fired.add(key);
     try { sessionStorage.setItem('sunup.fired', JSON.stringify([...fired].slice(-50))); } catch (e) { /* ignore */ }
+    if (nativeAlertsOn()) return; // the Android notification already covers it — no double ping
     toast(`<span><b>${esc(title)}</b><br>${esc(body)}</span>`, { ms: 7000, cls: 'alert', html: true });
     chime('warn');
     buzz([120, 60, 120]);
@@ -848,6 +917,7 @@
     d.wakeXp = wakeXpFor(t, target);
     if (allDone(d)) d.completeAt = t;
     save();
+    if (NATIVE) NATIVE.clearDelivered();
     justDone = 'up';
     render();
     floatXp(`+${d.wakeXp} ${U()}`);
@@ -880,6 +950,7 @@
     const finished = !d.completeAt && allDone(d);
     if (finished) d.completeAt = t;
     save();
+    if (NATIVE) NATIVE.clearDelivered();
     render();
     if (finished) {
       confetti();
@@ -981,6 +1052,28 @@
       if (S.settings.sound) chime('good');
       return;
     }
+    if (key === 'alerts' && NATIVE) {
+      if (nativeAlertsOn()) {
+        S.settings.alerts = false;
+        save();
+        el.setAttribute('aria-checked', 'false');
+        queueNativeSync(true);
+        toast('Reminders off');
+        return;
+      }
+      nativePerm = await NATIVE.requestPermission();
+      if (nativePerm !== 'granted') {
+        toast('Notifications are blocked — allow them in Android Settings → Apps → Sunup.', { ms: 5000 });
+        render();
+        return;
+      }
+      S.settings.alerts = true;
+      save();
+      render();
+      queueNativeSync(true);
+      toast('Reminders are on ✓');
+      return;
+    }
     if (key === 'alerts') {
       if (S.settings.alerts) { S.settings.alerts = false; save(); el.setAttribute('aria-checked', 'false'); return; }
       if (!('Notification' in window)) {
@@ -1045,6 +1138,9 @@
       save();
       const box = $('#cal-btns');
       if (box) box.innerHTML = calButtons();
+      const sum = $('#remind-summary');
+      if (sum) sum.textContent = remindersSummary();
+      queueNativeSync();
       toast(f === 'wakeTime' ? `Weekday alarm set to ${fmtHHMM(el.value)}` : `Friday reminder at ${fmtHHMM(el.value)}`);
     } else if (f === 'name') {
       S.settings.name = el.value.trim().slice(0, 24);
@@ -1085,7 +1181,12 @@
     downloadBlob(new Blob([ics], { type: 'text/calendar;charset=utf-8' }), `sunup-${kind}.ics`);
   }
   function exportData() {
-    downloadBlob(new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' }), `sunup-backup-${keyOf(now())}.json`);
+    const name = `sunup-backup-${keyOf(now())}.json`, json = JSON.stringify(S, null, 2);
+    if (NATIVE) {
+      NATIVE.shareFile(name, json).catch(() => toast('Couldn’t open the share sheet.'));
+      return;
+    }
+    downloadBlob(new Blob([json], { type: 'application/json' }), name);
     toast('Backup saved ✓');
   }
   function importData() {
@@ -1146,6 +1247,15 @@
     closeSheet();
     render();
     unlockAudio();
+    if (NATIVE) {
+      // Ask once, right after setting the alarm time — that's when it makes sense.
+      NATIVE.requestPermission().then((p) => {
+        nativePerm = p;
+        if (p === 'granted') { S.settings.alerts = true; save(); toast('Reminders are on ✓ — you’ll get a nudge at your alarm time.', { ms: 4500 }); }
+        softRender();
+        queueNativeSync(true);
+      });
+    }
   }
 
   /* ---------- Wiring ---------- */
@@ -1198,7 +1308,20 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastKey = keyOf(now()); softRender(); } });
   window.addEventListener('storage', (e) => { if (e.key === KEY) { S = load(); softRender(); } });
 
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  if (NATIVE) {
+    NATIVE.permission().then((p) => { nativePerm = p; softRender(); queueNativeSync(true); });
+    NATIVE.onResume(() => {
+      lastKey = keyOf(now());
+      NATIVE.permission().then((p) => { nativePerm = p; softRender(); queueNativeSync(true); });
+    });
+    // Android back: close a sheet → go to Today → leave the app.
+    NATIVE.onBack(() => {
+      const root = $('#sheet-root');
+      if (root.classList.contains('open')) { if (root.dataset.dismissable) closeSheet(); return; }
+      if (tab !== 'today') { go('today'); return; }
+      NATIVE.exit();
+    });
+  } else if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch(() => { /* offline support is optional */ });
   }
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});

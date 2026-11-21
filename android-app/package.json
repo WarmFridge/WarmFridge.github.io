@@ -1,0 +1,22 @@
+{
+  "name": "sunup-android",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Android wrapper for Sunup (Capacitor).",
+  "scripts": {
+    "prepare-www": "node scripts/prepare-www.js",
+    "sync": "npm run prepare-www && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.2",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.6.2",
+    "@capacitor/filesystem": "8.1.5",
+    "@capacitor/local-notifications": "8.3.1",
+    "@capacitor/share": "8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.2",
+    "esbuild": "0.28.2"
+  }
+}

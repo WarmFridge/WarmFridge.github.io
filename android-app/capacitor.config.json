@@ -1,0 +1,19 @@
+{
+  "appId": "io.github.warmfridge.sunup",
+  "appName": "Sunup",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#0D0F14"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover",
+      "style": "DARK"
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_sunup",
+      "iconColor": "#8B7CFF"
+    }
+  }
+}
