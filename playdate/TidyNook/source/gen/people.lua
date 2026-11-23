@@ -45,9 +45,9 @@ function People.make(rng, opts)
 		glasses = rng:pick({ "none", "none", "round", "square" }),
 		top = rng:pick(TOPS),
 		bottom = rng:pick({ 16, 12, 9, "vstripe" }),
-		extra = rng:pick({ "none", "none", "scarf", "apron", "bow", "earring", "freckles", "beard" }),
-		height = rng:int(56, 70),
-		width = rng:int(16, 22),
+		extra = rng:pick({ "none", "none", "scarf", "apron", "bow", "bow", "earring", "freckles" }),
+		height = rng:int(44, 54),
+		width = rng:int(16, 20),
 		voice = rng:range(260, 520),
 		blinkT = rng:int(20, 120),
 		mood = rng:pick({ "sunny", "dreamy", "shy", "chatty", "wise" }),
@@ -87,6 +87,9 @@ local MID = {
 	"Look at that! Neat as a pin.", "Take a little break whenever you like.",
 	"Mmm. It smells like fresh laundry and tea in here.", "You know, I think the room is smiling.",
 	"I found a button I lost months ago!", "The cat approves, I think.",
+	"Eee! So tidy!", "Look, everything's smiling now!", "You're a little tidying star.",
+	"The dust bunnies are hopping off to a new home.", "That mug looks so happy on its hook.",
+	"Hehe, I love watching you work.", "Ooh, sparkly!",
 }
 
 local OUTRO = {
@@ -95,6 +98,8 @@ local OUTRO = {
 	"I'm going to sit right here and enjoy this. Thank you, friend.",
 	"Everything has a place now. Even me. Thank you!",
 	"I'll think of you every time I find something where it belongs.",
+	"Everything's smiling now. So am I! Thank you, friend.",
+	"Eee, it's perfect! Let's have cocoa sometime.",
 }
 
 local MUSING = {

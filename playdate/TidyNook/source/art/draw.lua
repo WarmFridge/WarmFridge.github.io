@@ -124,6 +124,32 @@ function D.note(x, y)
 	gfx.drawLine(x + 3, y, x + 6, y + 2)
 end
 
+-- A tiny cute face centred at (x, y). mood: "happy" | "sad" | "sleepy" | "joy"
+-- look: the fill under it, so the face stays readable on dark or busy fills.
+function D.face(x, y, mood, look)
+	x, y = math.floor(x), math.floor(y)
+	local dark = type(look) == "number" and look >= 9
+	local busy = type(look) == "string" or (type(look) == "number" and look > 2 and look < 9)
+	if busy then
+		D.white(); gfx.fillEllipseInRect(x - 4, y - 2, 9, 6)
+	end
+	if dark then D.white() else D.black() end
+	if mood == "sleepy" then
+		gfx.fillRect(x - 3, y, 2, 1); gfx.fillRect(x + 2, y, 2, 1)
+	elseif mood == "joy" then
+		gfx.drawLine(x - 3, y + 1, x - 2, y); gfx.drawLine(x - 2, y, x - 1, y + 1)
+		gfx.drawLine(x + 1, y + 1, x + 2, y); gfx.drawLine(x + 2, y, x + 3, y + 1)
+	else
+		gfx.fillRect(x - 2, y - 1, 1, 2); gfx.fillRect(x + 2, y - 1, 1, 2)
+	end
+	if mood == "sad" then
+		gfx.fillRect(x - 1, y + 3, 1, 1); gfx.fillRect(x, y + 2, 1, 1); gfx.fillRect(x + 1, y + 3, 1, 1)
+	else
+		gfx.fillRect(x - 1, y + 2, 1, 1); gfx.fillRect(x + 1, y + 2, 1, 1); gfx.fillRect(x, y + 3, 1, 1)
+	end
+	D.black()
+end
+
 -- Text helpers (system font). The font marks *bold* and _italic_, so
 -- generated text never contains those characters.
 function D.textW(s)

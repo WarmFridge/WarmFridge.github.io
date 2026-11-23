@@ -45,6 +45,8 @@ function Wall.drawView(d, room, t)
 		if time == "night" then
 			D.white(); gfx.fillCircleAtPoint(sx, sy, 6)
 			D.fill(15); gfx.fillCircleAtPoint(sx + 3, sy - 2, 5)
+			-- a sleepy moon face
+			D.black(); gfx.fillRect(sx - 4, sy, 2, 1); gfx.fillRect(sx - 3, sy + 3, 2, 1)
 			-- stars
 			for i = 1, 10 do
 				local px, py = x + rng:int(1, w - 2), y + rng:int(1, h - 2)
@@ -52,8 +54,10 @@ function Wall.drawView(d, room, t)
 			end
 		elseif time ~= "sunset" then
 			D.circle(sx, sy, 6, 0)
+			D.face(sx, sy, "happy", 0)
 		else
 			D.circle(sx, y + h * 0.55, 8, 0)
+			D.face(sx, y + h * 0.55 - 2, "sleepy", 0)
 		end
 	end
 	-- clouds drift by

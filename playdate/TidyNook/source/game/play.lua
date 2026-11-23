@@ -391,7 +391,9 @@ function Play.release()
 		Gen.placeInSlot(P.room, it, s)
 		local nice = s.container or Play.neighbourMatch(s, it)
 		Sfx.place(nice)
+		it.pop = 18
 		Play.spawn("sparkle", s.x, s.y - 10, nice and 6 or 3)
+		Play.spawn("heart", s.x, s.y - 18, 1)
 		P.checkSoon = 10
 		P.placedCount = (P.placedCount or 0) + 1
 		if P.placedCount % 6 == 0 and P.rng:chance(0.5) and not Play.busyTalking() then
@@ -523,6 +525,7 @@ function Play.updateWorld(dt)
 	end
 	-- falling things
 	for _, it in ipairs(room.items) do
+		if it.pop and it.pop > 0 then it.pop = it.pop - 1 end
 		if it.fallTo then
 			it.vy = (it.vy or 0) + 0.6
 			it.y = it.y + it.vy

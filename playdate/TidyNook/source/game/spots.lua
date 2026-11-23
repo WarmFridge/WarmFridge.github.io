@@ -134,10 +134,22 @@ function Spots.draw(s, t)
 		local h = math.max(1, math.floor(2 + a * 4))
 		D.shade(math.floor(3 + a * 6))
 		gfx.fillRect(s.x, s.y - h, s.w, h)
-		-- fuzzy bits
-		D.black()
-		for i = 0, math.floor(s.w / 9 * a) do
-			gfx.fillRect(s.x + (i * 9 + (s.id * 5) % 9) % s.w, s.y - h - 1, 1, 1)
+		-- dust bunnies! little fuzzballs with eyes, shivering a bit
+		local n = math.max(1, math.floor(s.w / 24))
+		for i = 1, n do
+			local r = math.max(1.5, 2 + a * 2.5)
+			local bx = s.x + (i - 0.5) * s.w / n + math.sin(t * 9 + i + s.id) * 0.6
+			local by = s.y - r
+			D.shade(9); gfx.fillCircleAtPoint(bx, by, r + 1)
+			D.fill(3); gfx.fillCircleAtPoint(bx, by, r)
+			D.black()
+			for k = 0, 5 do
+				local ang = k * 1.05 + s.id
+				gfx.fillRect(bx + math.cos(ang) * (r + 1), by + math.sin(ang) * (r + 1) - 0.5, 1, 1)
+			end
+			if a > 0.25 then
+				gfx.fillRect(bx - 1.5, by - 1, 1, 2); gfx.fillRect(bx + 1, by - 1, 1, 2)
+			end
 		end
 	elseif ty == "cobweb" then
 		D.shade(math.floor(4 + a * 10))
@@ -157,10 +169,17 @@ function Spots.draw(s, t)
 				px, py = x2, y2
 			end
 		end
-		if a > 0.5 then
+		if a > 0.4 then
+			-- a tiny friendly spider who will happily move out
 			D.black(); local sx = cx + dir * r * 0.5
-			local sy = cy + r * 0.5 + math.sin(t * 2 + s.id) * 2
-			gfx.drawLine(sx, cy + r * 0.2, sx, sy); gfx.fillCircleAtPoint(sx, sy, 1)
+			local sy = cy + r * 0.55 + math.sin(t * 2 + s.id) * 2
+			gfx.drawLine(sx, cy + r * 0.2, sx, sy - 3)
+			gfx.fillCircleAtPoint(sx, sy, 3)
+			for k = -1, 1, 2 do
+				gfx.drawLine(sx - 3, sy + k, sx - 5, sy + k * 2); gfx.drawLine(sx + 3, sy + k, sx + 5, sy + k * 2)
+			end
+			D.white(); gfx.fillRect(sx - 2, sy - 1, 1, 1); gfx.fillRect(sx + 1, sy - 1, 1, 1)
+			D.black()
 		end
 	elseif ty == "crumbs" or ty == "soil" then
 		D.black()

@@ -13,6 +13,14 @@ local function dirtOverlay(it, x, y, w, h)
 end
 
 Items.defs = {}
+
+-- things are a little lost on the floor, happy at home, overjoyed just after
+local function mood(it, placed)
+	if it.dirt and it.dirt > 0.05 then return "sad" end
+	if it.pop and it.pop > 0 then return "joy" end
+	if placed then return "happy" end
+	return "sad"
+end
 local defs = Items.defs
 
 ------------------------------------------------------------------ books
@@ -71,11 +79,11 @@ defs.mug = {
 	cat = "mug", label = "mug", plural = "mugs", dirty = 0.6,
 	make = function(rng) return { look = rng:pick({ 0, 0, "hstripe", "dots", 6, "check" }), heart = rng:chance(0.25) } end,
 	size = function() return 14, 11 end,
-	draw = function(it, x, y)
+	draw = function(it, x, y, placed)
 		D.black(); gfx.drawCircleAtPoint(x + 5, y - 6, 3)
 		D.box(x - 6, y - 11, 11, 11, it.look, 2)
-		if it.heart then D.heart(x - 0.5, y - 7, 0.6) end
 		dirtOverlay(it, x - 5, y - 10, 9, 9)
+		D.face(x - 1, y - 7, mood(it, placed), it.look)
 	end,
 }
 
@@ -83,12 +91,14 @@ defs.cup = {
 	cat = "cup", label = "teacup", plural = "teacups", dirty = 0.6,
 	make = function(rng) return { look = rng:pick({ 0, "dots", "hstripe" }) } end,
 	size = function() return 16, 9 end,
-	draw = function(it, x, y)
+	draw = function(it, x, y, placed)
 		D.oval(x - 8, y - 3, 16, 4, 0)
 		D.black(); gfx.drawCircleAtPoint(x + 5, y - 6, 2)
 		D.look(it.look); gfx.fillRect(x - 5, y - 9, 10, 6)
 		D.black(); gfx.drawRect(x - 5, y - 9, 10, 6)
 		dirtOverlay(it, x - 4, y - 8, 8, 4)
+		if not (it.dirt and it.dirt > 0.05) then D.white(); gfx.fillRect(x - 3, y - 8, 7, 4) end
+		D.face(x, y - 7, mood(it, placed), 0)
 	end,
 }
 
@@ -199,12 +209,13 @@ defs.jar = {
 	cat = "jar", label = "jar", plural = "jars",
 	make = function(rng) return { h = rng:int(10, 18), look = rng:pick({ 0, "dots", 4, "diag", 9 }), lid = rng:pick({ 16, 9 }) } end,
 	size = function(it) return 10, it.h end,
-	draw = function(it, x, y)
+	draw = function(it, x, y, placed)
 		D.box(x - 5, y - it.h + 3, 10, it.h - 3, 0, 1)
 		D.look(it.look); gfx.fillRect(x - 4, y - it.h + 6, 8, it.h - 8)
 		D.box(x - 5, y - it.h, 10, 4, it.lid)
-		D.white(); gfx.fillRect(x - 3, y - it.h / 2 - 1, 6, 4)
-		D.black(); gfx.drawRect(x - 3, y - it.h / 2 - 1, 6, 4)
+		D.white(); gfx.fillRect(x - 4, y - it.h / 2 - 2, 8, 6)
+		D.black(); gfx.drawRect(x - 4, y - it.h / 2 - 2, 8, 6)
+		D.face(x, y - it.h / 2, mood(it, placed), 0)
 	end,
 }
 
@@ -212,10 +223,11 @@ defs.bottle = {
 	cat = "bottle", label = "bottle", plural = "bottles",
 	make = function(rng) return { h = rng:int(14, 20), look = rng:pick({ 0, 4, 9, "hstripe" }) } end,
 	size = function(it) return 9, it.h end,
-	draw = function(it, x, y)
+	draw = function(it, x, y, placed)
 		D.box(x - 4, y - it.h + 5, 8, it.h - 5, it.look, 2)
 		D.box(x - 2, y - it.h, 4, 6, 16)
-		D.white(); gfx.fillRect(x - 3, y - it.h / 2, 6, 3)
+		D.white(); gfx.fillRect(x - 3, y - it.h / 2 - 1, 7, 6)
+		D.face(x, y - it.h / 2 + 1, mood(it, placed), 0)
 	end,
 }
 
@@ -224,7 +236,7 @@ defs.plant = {
 	cat = "plant", label = "little plant", plural = "plants",
 	make = function(rng) return { kind = rng:pick({ "fern", "succulent", "cactus", "flower", "trail" }), pot = rng:pick({ 9, 4, "hstripe", 0 }) } end,
 	size = function() return 14, 18 end,
-	draw = function(it, x, y)
+	draw = function(it, x, y, placed)
 		local k = it.kind
 		D.black()
 		if k == "fern" then
@@ -244,6 +256,7 @@ defs.plant = {
 		end
 		D.quad(x - 6, y - 9, x + 6, y - 9, x + 4, y, x - 4, y, it.pot)
 		D.quadOutline(x - 6, y - 9, x + 6, y - 9, x + 4, y, x - 4, y)
+		D.face(x, y - 5, mood(it, placed), it.pot)
 	end,
 }
 
@@ -280,9 +293,9 @@ defs.cushion = {
 	cat = "cushion", label = "cushion", plural = "cushions",
 	make = function(rng) return { look = rng:pick({ "check", "dots", "knit", 4, "diamond" }) } end,
 	size = function() return 18, 13 end,
-	draw = function(it, x, y)
+	draw = function(it, x, y, placed)
 		D.box(x - 9, y - 13, 18, 13, it.look, 5)
-		D.circle(x, y - 6, 1, 0)
+		D.face(x, y - 7, mood(it, placed), it.look)
 	end,
 }
 
@@ -316,12 +329,13 @@ defs.yarn = {
 	cat = "yarn", label = "yarn", plural = "yarn balls",
 	make = function(rng) return { look = rng:pick({ 0, 4, 9 }) } end,
 	size = function() return 13, 13 end,
-	draw = function(it, x, y)
+	draw = function(it, x, y, placed)
 		D.circle(x, y - 6, 6, it.look)
 		D.black()
 		gfx.drawArc(x - 3, y - 6, 6, 300, 60)
 		gfx.drawArc(x + 3, y - 4, 6, 120, 240)
 		gfx.drawLine(x + 5, y - 2, x + 11, y)
+		D.face(x, y - 7, mood(it, placed), it.look + 3)
 	end,
 }
 
@@ -330,7 +344,7 @@ defs.pastry = {
 	make = function(rng) return { kind = rng:pick({ "croissant", "muffin", "donut", "bun" }) } end,
 	size = function() return 15, 10 end,
 	label2 = function(it) return it.kind end,
-	draw = function(it, x, y)
+	draw = function(it, x, y, placed)
 		local k = it.kind
 		if k == "croissant" then
 			D.oval(x - 8, y - 7, 16, 7, 3)
@@ -343,8 +357,8 @@ defs.pastry = {
 			D.oval(x - 3, y - 4, 6, 2, 0)
 		else
 			D.oval(x - 7, y - 9, 14, 9, 2)
-			D.black(); gfx.drawArc(x, y - 1, 5, 300, 60)
 		end
+		D.face(x, (k == "muffin") and (y - 8) or (y - 4), mood(it, placed), 0)
 	end,
 }
 
@@ -353,13 +367,14 @@ defs.fruit = {
 	make = function(rng) return { kind = rng:pick({ "apple", "orange", "pear", "lemon" }) } end,
 	size = function() return 11, 11 end,
 	label2 = function(it) return it.kind end,
-	draw = function(it, x, y)
+	draw = function(it, x, y, placed)
 		local k = it.kind
 		if k == "pear" then D.circle(x, y - 4, 4, 3); D.circle(x, y - 8, 3, 3)
 		elseif k == "lemon" then D.oval(x - 6, y - 7, 12, 7, 1)
-		else D.circle(x, y - 5, 5, k == "orange" and "dots" or 5) end
+		else D.circle(x, y - 5, 5, k == "orange" and 2 or 1) end
 		D.black(); gfx.drawLine(x, y - 10, x + 1, y - 13)
 		if k == "apple" then D.oval(x + 1, y - 14, 4, 2, 9) end
+		D.face(x, (k == "pear") and (y - 5) or (y - 5), mood(it, placed), 0)
 	end,
 }
 
@@ -409,5 +424,7 @@ function Items.size(it, placed)
 end
 
 function Items.draw(it, x, y, placed)
-	defs[it.kind].draw(it, math.floor(x), math.floor(y), placed)
+	local hop = 0
+	if it.pop and it.pop > 0 then hop = math.floor(math.abs(math.sin(it.pop * 0.45)) * 5) end
+	defs[it.kind].draw(it, math.floor(x), math.floor(y) - hop, placed)
 end

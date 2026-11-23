@@ -160,6 +160,7 @@ draw.plant = function(fx, t)
 	D.quad(cx - 11, by - 20, cx + 11, by - 20, cx + 8, by, cx - 8, by, d.pot or 9)
 	D.quadOutline(cx - 11, by - 20, cx + 11, by - 20, cx + 8, by, cx - 8, by)
 	D.box(cx - 12, by - 22, 24, 4, d.pot or 9)
+	D.face(cx, by - 11, fx.done and "joy" or (droop > 0.5 and "sad" or "happy"), d.pot or 9)
 end
 
 draw.bed = function(fx, t)

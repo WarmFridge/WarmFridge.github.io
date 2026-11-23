@@ -131,6 +131,8 @@ function Title.draw()
 	local ok = false
 	if T.titleImg and T.titleImg.drawScaled then ok = pcall(T.titleImg.drawScaled, T.titleImg, 24, 14, 2) end
 	if not ok then gfx.drawText("*Tidy Nook*", 50, 26) end
+	D.heart(172, 24 + math.sin(t * 2) * 2, 1)
+	D.sparkle(160, 46, math.floor(2 + (math.sin(t * 3) + 1)))
 	-- menu
 	D.panel(14, 66, 130, 18 + #T.items * 20, 8)
 	for i, it in ipairs(T.items) do
