@@ -2,6 +2,8 @@
 
 A cozy, unhurried Playdate game about tidying little places.
 
+![Tidy Nook in action](tidy-nook.gif)
+
 ![Tidy Nook screens](screenshots.png)
 No score. No timer. Just you, a crank, some soft lofi and a room that slowly gets cozier.
 
@@ -77,6 +79,7 @@ cd playdate/TidyNook
 lua5.4 tools/smoketest.lua            # visits every menu, then a bot tidies one of every place, saving and resuming midway
 lua5.4 tools/screenshots.lua /tmp/s   # records draw calls for a set of screens...
 python3 tools/render_log.py /tmp/s/21_bookstore_1.log out.png   # ...and renders them to PNG
+lua5.4 tools/gif.lua /tmp/session.log && python3 tools/render_log.py --gif /tmp/session.log tidy-nook.gif   # a scripted play session as a GIF
 ```
 
 The mock rejects nil/NaN drawing arguments, bad patterns, out-of-range note volumes and anything that wouldn't survive the datastore's JSON.

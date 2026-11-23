@@ -247,6 +247,7 @@ function M.step(input)
 	M.frame = M.frame + 1
 	pd.update()
 	if ctxDepth ~= 0 then error("graphics context left pushed after frame " .. M.frame) end
+	rec("frameEnd", M.frame)
 end
 
 return M

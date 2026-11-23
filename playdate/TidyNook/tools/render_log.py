@@ -13,6 +13,10 @@ FONT = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 12)
 FONTB = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 12)
 
 
+GLYPHS = {'\u24b6': '(A)', '\u24b7': '(B)', '\U0001F3A3': 'crank', '\u271b': '+', '\ufe0f': '',
+          '\u2b05': '<', '\u27a1': '>', '\u2b06': '^', '\u2b07': 'v'}
+
+
 def parse(line):
     out, i, n = [], 0, len(line)
     while i < n:
@@ -123,6 +127,7 @@ class R:
             s, x, y = a[0], *self.O(a[1], a[2])
             bold = s.startswith('*') and s.endswith('*')
             s = s.replace('*', '').replace('_', '')
+            for a, b in GLYPHS.items(): s = s.replace(a, b)
             img = Image.new('1', (self.cv.w, self.cv.h), 0)
             ImageDraw.Draw(img).text((x, y + 1), s, font=FONTB if bold else FONT, fill=1)
             m = np.array(img, dtype=bool)
@@ -177,7 +182,29 @@ class R:
         self.paint(m)
 
 
+def gif(src, dst, every=2, scale=2):
+    r = R()
+    frames = []
+    n = 0
+    with open(src, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            line = line.rstrip('\n')
+            if not line: continue
+            c = parse(line)
+            if c[0] == 'frameEnd':
+                n += 1
+                if n % every == 0:
+                    im = Image.fromarray(r.screen.px, 'L').convert('1')
+                    frames.append(im.resize((400 * scale, 240 * scale), Image.NEAREST).convert('P'))
+                continue
+            r.run(c)
+    frames[0].save(dst, save_all=True, append_images=frames[1:], duration=int(1000 / 30 * every), loop=0, optimize=True)
+    print(len(frames), 'frames')
+
+
 def main():
+    if sys.argv[1] == '--gif':
+        return gif(sys.argv[2], sys.argv[3], int(sys.argv[4]) if len(sys.argv) > 4 else 2)
     src, dst = sys.argv[1], sys.argv[2]
     scale = int(sys.argv[3]) if len(sys.argv) > 3 else 2
     r = R()
