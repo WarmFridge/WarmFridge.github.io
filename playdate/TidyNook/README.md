@@ -1,6 +1,8 @@
 # Tidy Nook 🧽
 
 A cozy, unhurried Playdate game about tidying little places.
+
+![Tidy Nook screens](screenshots.png)
 No score. No timer. Just you, a crank, some soft lofi and a room that slowly gets cozier.
 
 It's cute, too: chibi people with rosy cheeks, kittens and puppies to pet, dust bunnies with little eyes, and mugs, jars, plant pots and pastries that look a bit lost on the floor and smile once they're back where they belong.
