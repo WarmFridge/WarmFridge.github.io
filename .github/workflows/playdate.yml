@@ -1,0 +1,74 @@
+name: Tidy Nook (Playdate)
+
+# Tests and builds the Playdate game, then publishes TidyNook.pdx.zip as a
+# GitHub Release you can sideload at https://play.date/account/sideload/
+# The release is never marked "latest", so the Sunup APK link keeps working.
+on:
+  push:
+    paths:
+      - 'playdate/**'
+      - '.github/workflows/playdate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: playdate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pdx:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: playdate/TidyNook
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Lua 5.4
+        run: sudo apt-get update && sudo apt-get install -y lua5.4
+
+      - name: Headless smoke test (every place, start to finish)
+        run: lua5.4 tools/smoketest.lua
+
+      - name: Download the Playdate SDK
+        run: |
+          curl -sSL -o "$RUNNER_TEMP/sdk.tar.gz" https://download.panic.com/playdate_sdk/Linux/PlaydateSDK-latest.tar.gz
+          mkdir -p "$RUNNER_TEMP/sdk"
+          tar -xzf "$RUNNER_TEMP/sdk.tar.gz" -C "$RUNNER_TEMP/sdk" --strip-components=1
+          echo "PLAYDATE_SDK_PATH=$RUNNER_TEMP/sdk" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/sdk/bin" >> "$GITHUB_PATH"
+
+      - name: Compile
+        run: |
+          pdc --version || true
+          # each build gets a higher build number so the Playdate offers the update
+          sed -i "s/^buildNumber=.*/buildNumber=${{ github.run_number }}/" source/pdxinfo
+          pdc source TidyNook.pdx
+          zip -qr TidyNook.pdx.zip TidyNook.pdx
+          ls -la TidyNook.pdx TidyNook.pdx.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TidyNook.pdx
+          path: playdate/TidyNook/TidyNook.pdx.zip
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'NOTES'
+          **Put Tidy Nook on your Playdate**
+          1. Download **TidyNook.pdx.zip** below.
+          2. Go to https://play.date/account/sideload/ and upload the zip.
+          3. On the Playdate: Settings > Games, then find Tidy Nook in your Sideloaded games.
+
+          Or unzip it and drag **TidyNook.pdx** onto the Playdate Simulator.
+          NOTES
+          gh release create "tidy-nook-v1.0.${{ github.run_number }}" TidyNook.pdx.zip \
+            --target "${{ github.sha }}" \
+            --title "Tidy Nook for Playdate 1.0.${{ github.run_number }}" \
+            --notes-file notes.md \
+            --latest=false

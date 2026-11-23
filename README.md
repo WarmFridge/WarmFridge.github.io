@@ -74,3 +74,7 @@ Everything stays on your device (no account, no server). Use **Settings → Back
 - `android-app/`: Android wrapper (Capacitor). `native-src.js` adds scheduled notifications, the back button and backup sharing
 
 When you change app files, bump `CACHE` in `sw.js` so installed copies pick up the update.
+
+## Also in this repo: Tidy Nook 🧽
+
+A cozy Playdate game about tidying little places, with generative lofi music. See [`playdate/TidyNook`](playdate/TidyNook/README.md).

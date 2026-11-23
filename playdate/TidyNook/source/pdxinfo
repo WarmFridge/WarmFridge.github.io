@@ -1,0 +1,7 @@
+name=Tidy Nook
+author=WarmFridge
+description=A cozy, unhurried game about tidying little places. Crank to grab and scrub, blow away the dust, and listen to soft lofi. No score, no timer.
+bundleID=io.github.warmfridge.tidynook
+version=1.0
+buildNumber=1
+imagePath=launcher
